@@ -13,12 +13,6 @@ namespace output{
         as it is not dynamically allocated and will be destroyed(!) at the end of the calling scope.
     */
     string makeFunctionType(const string& retType, vector<string>& argTypes);
-
-    /* Do not save the string returned from this function in a data structure 
-        as it is not dynamically allocated and will be destroyed(!) at the end of the calling scope.
-    */
-    string makeArrayType(const string& elementType, const int size);
-
     void errorLex(int lineno);
     void errorSyn(int lineno);
     void errorUndef(int lineno, const string& id);
@@ -29,7 +23,7 @@ namespace output{
     void errorUnexpectedBreak(int lineno);
     void errorMainMissing();
     void errorByteTooLarge(int lineno, const string& value);
-    void errorInvalidArraySize(int lineno, const string& id);
+    void errorTooManyDefaults(int lineno);
 }
 
 #endif

@@ -6,12 +6,10 @@
 #include <vector>
 #include <list>
 #include <stack>
-#include "util.h"
 #include "output.hpp"
 
 
 using namespace std;
-
 
 
 class Name{
@@ -162,10 +160,9 @@ public:
 					continue;
 				}
 				string type ;
-					type = getNameType(name->type);
+					type = name->type;
 
 				if(prints){
-
 					output::printID(name->id,name->offSet,type);
 
 				}
@@ -182,7 +179,7 @@ public:
 					}
 					string type ;
 
-						type  = getNameType(name->type);
+						type = name->type;
 
 					if(prints){
 						output::printID(name->id,name->offSet,type);
@@ -287,11 +284,8 @@ public:
 
 		Name* name_p = new Name(name);
 
-		if(isArray(name_p->type)){
-			name_scope_tuple_stack.push_back(pair<Name*,int>(name_p,scopeDepth));
-			name_p->setOffSet( *(--offsets_stack.end()) );
-			(*(--offsets_stack.end()))+= getArrSize(name_p->type) ;
-		} else if(name.type != "func"){
+
+		if(name.type != "func"){
 			name_scope_tuple_stack.push_back(pair<Name*,int>(name_p,scopeDepth));
 			name_p->setOffSet(*(--offsets_stack.end()));
 			(*(--offsets_stack.end()))++;
@@ -309,24 +303,9 @@ public:
 	Name* getNoneConstName(string id){
 		return symbols_map[id];
 	}
-	void setFuncParams(list<pair<string,string> > params,int lineno){
-		int sum = 0;
+	void setFuncParams(list<pair<string,string> > params){
+		offsets_stack.push_back(-1*params.size());
 		for(list<pair<string,string> >::reverse_iterator it = params.rbegin(); it!=params.rend(); ++it ){
-			//cout << "DEBUG getArrSize(it->second);" << it->first + " "+  it->second << endl;
-			if(isArray(it->first)){
-				sum += getArrSize(it->first);
-			} else {
-				sum++;
-			}
-		}
-		//cout << "DEBUG sum = " << sum << endl;
-		offsets_stack.push_back(-1*sum);
-		for(list<pair<string,string> >::reverse_iterator it = params.rbegin(); it!=params.rend(); ++it ){
-			if(isNameDefined(it->second)){
-				output::errorDef(lineno, it->second);
-				set_prints(false);
-				exit(0);
-			}
 			addNameable(Name(it->second,it->first));
 		}
 	}
@@ -350,7 +329,7 @@ public:
 		//cout << "number of functions is : " << functions_vector.size() << endl;
 		for(vector<Name*>::iterator it = functions_vector.begin() ; it != functions_vector.end() ; it++){
 			Name* func = *it;
-			cout << ">>>name: " <<  func->id << " , " << "retType: " << func->returnType << ", " << "params: "  ;
+			//cout << ">>>name: " <<  func->id << " , " << "retType: " << func->returnType << ", " << "params: "  ;
 			for(int i=0 ; i<func->numerOfParams ; i++){
 				cout << func->parameters[i].first << " " << func->parameters[i].second << " ,  ";
 			}
