@@ -1,6 +1,7 @@
 #include <iostream>
 #include "output.hpp"
 #include <sstream>
+#include "util.hpp"
 
 using namespace std;
 
@@ -15,8 +16,14 @@ void output::printID(const string& id, int offset, const string& type  ){
 string typeListToString(const std::vector<string>& argTypes) {
 	stringstream res;
 	res << "(";
+	string actual_type;
 	for(int i = 0; i < argTypes.size(); ++i) {
-		res << argTypes[i];
+		if(isArray(argTypes[i])){
+			actual_type = output::makeArrayType(getArrType(argTypes[i]),getArrSize(argTypes[i]));
+		} else {
+			actual_type = argTypes[i];
+		}
+		res << actual_type;
 		if (i + 1 < argTypes.size())
 			res << ",";
 	}
@@ -31,6 +38,12 @@ string output::makeFunctionType(const string& retType, std::vector<string>& argT
 	return res.str();
 }
 
+string output::makeArrayType(const string& elementType, int size)
+{
+	stringstream res;
+	res << elementType << "[" << size << "]";
+	return res.str();
+}
 
 void output::errorLex(int lineno){
     cout << "line " << lineno << ":" << " lexical error" << endl;
@@ -72,6 +85,6 @@ void output::errorByteTooLarge(int lineno, const string& value) {
 	cout << "line " << lineno << ": byte value " << value << " out of range"<< endl;
 } 
 
-void output::errorTooManyDefaults(int lineno) {
-    cout << "line " << lineno << ":" << " too many default cases" << endl;
+void output::errorInvalidArraySize(int lineno, const string& id) {
+    cout << "line " << lineno << ": array " << id << " declared with invalid size" << endl;
 }

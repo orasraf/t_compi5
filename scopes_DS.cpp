@@ -1,88 +1,16 @@
-#include <iostream>
-#include <cstddef>
-#include <string>
-#include <stdlib.h>
-#include <map>
-#include <vector>
-#include <list>
-#include <stack>
-#include "output.hpp"
+#include "scopes_DS.hpp"
+
 
 
 using namespace std;
 
 
-class Name{
-public:
-	Name(string id, string type):id(id),type(type),returnType(""),numerOfParams(0),parameters(NULL){
-		offSet=0;
-	}
-	Name(string id, string type, string ret,int numerOfParams ,pair<string,string>* params):
-		id(id),type(type),returnType(ret),numerOfParams(numerOfParams){
-		parameters = new pair<string,string>[numerOfParams];
-		for(int i=0; i< numerOfParams ; i++){
-			parameters[i] = params[i];
-		}
-		offSet=0;
-	}
-	Name(string id, string type, string ret):
-			id(id),type(type),returnType(ret),numerOfParams(0),parameters(NULL){
-		offSet=0;
-	}
-	Name(const Name& name){
-		offSet=0;
-		id = name.id;
-		type = name.type;
-		numerOfParams = name.numerOfParams;
-		returnType = name.returnType;
-		if(numerOfParams>0){
-			parameters = new pair<string,string>[numerOfParams];
-			for(int i=0; i< numerOfParams ; i++){
-				parameters[i] = name.parameters[i];
-			}
-		} else {
-			parameters =NULL;
-		}
-	}
-	~Name(){
-		if(numerOfParams > 0 ){
-			delete[] parameters;
-		}
-	}
-	void update(list<pair<string,string> > params){
-		numerOfParams = params.size();
-		parameters = new pair<string,string>[numerOfParams];
-		int i =0;
-		for(list<pair<string,string> >::iterator it = params.begin(); it!=params.end(); ++it ){
-			parameters[i] = *it;
-			i++;
-		}
-	}
-	void setOffSet(int offset){
-		offSet = offset;
-	}
 
-	string id; // the name. like int BLABLA . so BLABLA is the name / id
-	//string hash; // basically how to get to the name from the root. EX: (2_5_11_3)
-	string type; // int , bool , func, etc ..
-	string returnType;
-	int numerOfParams;
-	pair<string,string>* parameters;
-	int offSet ;
 
-};
 
-class SymbolsTable{
-	int _while;
-	int _switch;
-	map<string, Name*> symbols_map;
-	vector<int> offsets_stack;
-	vector<pair<Name*,int> > name_scope_tuple_stack;
-	vector<Name*> functions_vector;
-	int scopeDepth ;
-	bool prints;
-public:
-	SymbolsTable(){
+
+
+SymbolsTable::SymbolsTable(){
 		_while= 0;
 		_switch=0;
 		prints=true;
@@ -91,7 +19,7 @@ public:
 		enterScope();
 		//offsets_stack.push_back(0);
 	}
-	~SymbolsTable(){
+SymbolsTable::~SymbolsTable(){
 
 		//cout << " --- Destructor --- " << endl;
 		for(vector<pair<Name*,int> >::iterator it = name_scope_tuple_stack.begin() ; it != name_scope_tuple_stack.end()
@@ -110,28 +38,28 @@ public:
 
 
 	}
-	int getWhileCount(){
+	int SymbolsTable::getWhileCount(){
 		return _while;
 	}
-	void incWhile(){
+	void SymbolsTable::incWhile(){
 		_while++;
 	}
-	void decWhile(){
+	void SymbolsTable::decWhile(){
 		_while--;
 	}
-	int getSwitchCount(){
+	int SymbolsTable::getSwitchCount(){
 		return _switch;
 	}
-	void incSwitch(){
+	void SymbolsTable::incSwitch(){
 		_switch++;
 	}
-	void decSwitch(){
+	void SymbolsTable::decSwitch(){
 		_switch--;
 	}
-	void set_prints(bool b){
+	void SymbolsTable::set_prints(bool b){
 		prints=b;
 	}
-	void exitScope(){
+	void SymbolsTable::exitScope(){
 		//--cout << "... scope depth (Before Exit) = " << scopeDepth << endl;
 		if(scopeDepth == 0){
 
@@ -220,7 +148,7 @@ public:
 		offsets_stack.pop_back();
 		scopeDepth--;
 	}
-	void enterScope(){
+	void SymbolsTable::enterScope(){
 		scopeDepth++;
 		//--cout << "...scopeDepth (After Enter) = " << scopeDepth << endl;
 		if(offsets_stack.empty()){
@@ -229,25 +157,25 @@ public:
 		}
 		offsets_stack.push_back(  (*(--offsets_stack.end()))  );
 	}
-	void enterFunctionScope(int numberOfParams){
+	void SymbolsTable::enterFunctionScope(int numberOfParams){
 		scopeDepth++;
 		offsets_stack.push_back(-1*numberOfParams);
 	}
-	void closeFunctionScope(){
+	void SymbolsTable::closeFunctionScope(){
 		exitScope();
 	}
-	bool isNameDefined(string id){
+	bool SymbolsTable::isNameDefined(string id){
 		//cout << "isNameDefined : " << id ;
 		for(vector<pair<Name*,int> >::iterator it = name_scope_tuple_stack.begin();
 				it != name_scope_tuple_stack.end(); ++it){
-			if (it->first->id == id){
+			if ( ((Name*)it->first)->id == id){
 				//cout << " true" << endl;
 				return true;
 			}
 		}
 		for(vector<Name*>::iterator it = functions_vector.begin();
 				it != functions_vector.end(); ++it){
-			if((*it)->id == id){
+			if(   ( (Name *) (*it))->id == id){
 				//cout << " true" << endl;
 				return true;
 			}
@@ -274,7 +202,7 @@ public:
 //
 //	}
 
-	void addNameable(Name name){
+	void SymbolsTable::addNameable(Name name){
 		//--//--cout << "addNameable : " << name.id  << ", "<< name.type << endl;
 		if(isNameDefined(name.id)){
 			//--//--cout << name.id << " is already defined. no shadowing allowed." << endl;
@@ -290,27 +218,27 @@ public:
 			name_p->setOffSet(*(--offsets_stack.end()));
 			(*(--offsets_stack.end()))++;
 		} else {
-			functions_vector.push_back(name_p);
+			functions_vector.push_back(  name_p);
 		}
 
 
 		symbols_map.insert(pair<string,Name*>(name.id,name_p));
 
 	}
-	const Name* getName(string id){
+	const Name* SymbolsTable::getName(string id){
 		return symbols_map[id];
 	}
-	Name* getNoneConstName(string id){
+	Name* SymbolsTable::getNoneConstName(string id){
 		return symbols_map[id];
 	}
-	void setFuncParams(list<pair<string,string> > params){
+	void SymbolsTable::setFuncParams(list<pair<string,string> > params){
 		offsets_stack.push_back(-1*params.size());
 		for(list<pair<string,string> >::reverse_iterator it = params.rbegin(); it!=params.rend(); ++it ){
 			addNameable(Name(it->second,it->first));
 		}
 	}
 
-	void printOffSet(){
+	void SymbolsTable::printOffSet(){
 		if(name_scope_tuple_stack.empty()){
 			//--//--cout << "empty" << endl;
 			return;
@@ -318,11 +246,11 @@ public:
 		pair<Name*,int> top = *(--name_scope_tuple_stack.end());
 		//--//--cout << top.first->id << " : " << top.second << " : " << *(--offsets_stack.end()) << endl ;
 	}
-	void printOffSet(string id){
+	void SymbolsTable::printOffSet(string id){
 		Name* name = symbols_map[id];
 		//--//--cout << name->id << " : offset = " << name->offSet << endl;
 	}
-	void printFunc(){
+	void SymbolsTable::printFunc(){
 		if(functions_vector.empty()){
 			//cout<< "No functions defined." << endl;
 		}
@@ -344,7 +272,7 @@ public:
 //		  }
 //		    std:://--//--cout << it->first << " => " << it->second << '\n';
 //	}
-};
+
 
 //class OffsetStack{
 //	list<int> offsetList;

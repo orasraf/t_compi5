@@ -105,7 +105,7 @@ void divRegs(Register r1, Register r2){
 	cb.emit("syscall");
 	cb.emit("li $v0, 10");
 	cb.emit("syscall");
-	string bp = cb.next();
+	string bp = cb.genLabel();
 	cb.emit("div " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
 	cb.bpatch(cb.makelist(origbp),bp);
 	if (swapped){

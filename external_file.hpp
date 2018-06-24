@@ -13,13 +13,14 @@
 #include <iostream>
 #include <cstddef>
 #include <string>
-#include "scopes_DS.cpp"
+#include "scopes_DS.hpp"
 #include "registerPool.hpp"
 
 using namespace std;
 
 extern SymbolsTable st;
 extern RegisterPool rp;
+extern int program_main;
 
 class Node;
 typedef Node* Node_ptr;
@@ -65,6 +66,7 @@ public:
 	int getNumberOfSons();
 	void setSon(int idx, Node_ptr son_p);
 	Node_ptr getSon(int idx);
+	string name;
 };
 
 class Op : public Node{
@@ -122,7 +124,7 @@ public:
 class Funcs : public Node{
 public:
 	bool is_main;
-
+	string f_list;
 
 	Funcs(Node_ptr funcdecl_p, Node_ptr funcs_p, int lineno);
 	Funcs(int lineno);
@@ -131,7 +133,7 @@ public:
 class FuncDecl : public Node{
 public:
 	bool is_main;
-
+	string f_name;
 	FuncDecl(Node_ptr rettype_p, Node_ptr id_p, Node_ptr formals_p, Node_ptr statements_p, int lineno, Node_ptr M_marker);
 };
 
@@ -157,6 +159,8 @@ class FormalDecl : public Node{
 public:
 	pair<string,string> nameable;
 	FormalDecl(Node_ptr type_p, Node_ptr id_p, int lineno);
+	//==================== ARRAY ======================
+	FormalDecl(Node_ptr type_p, Node_ptr id_p , Node_ptr arr_size_p , string rule , int lineno);
 };
 class Statements: public Node{
 public:
@@ -166,14 +170,12 @@ public:
 	int ln;
 
 
-	//Statements(Node_ptr statement_p, int lineno ,Node_ptr M_marker = NULL);
-	Statements(Node_ptr statement_p, int lineno );
+	Statements(Node_ptr statement_p, int lineno);
 	Statements(Node_ptr statements_p, Node_ptr statement_p, int lineno, Node_ptr M_marker = NULL );
 };
 
 class StatementIF : public Node{
 public:
-
 	StatementIF(Node_ptr exp_p, Node_ptr statement_p, int lineno , Node_ptr marker);
 };
 
@@ -186,7 +188,6 @@ public:
 	int ln; //currently this only indicates the line of the break, if found.
 
 
-
 	Statement(string ter, int lineno);
 	Statement(Node_ptr call_p, int lineno);
 	Statement(string kind, Node_ptr b_p, int lineno);
@@ -197,7 +198,10 @@ public:
 	Statement(string op1, Node_ptr exp_p, Node_ptr caselist_p, string op2, int lineno, Node_ptr N_marker, Node_ptr marker);
 	Statement(Node_ptr type_p, Node_ptr id_p, Node_ptr exp_p, int lineno);
 	Statement(Node_ptr if_p, Node_ptr sb_p, int lineno, int twice,Node_ptr N_marker, Node_ptr M_marker );
-
+	// TODO: array added 2
+	//============================ ARRAY ==============================================
+	Statement(Node_ptr type_p , Node_ptr id_p , Node_ptr arr_size_p , string rule , int lineno);
+	Statement(Node_ptr id_p , Node_ptr exp1_p , Node_ptr exp2_p , string rule , string dummy , int lineno);
 };
 
 int maxilin(int ln1, int ln2);
@@ -273,8 +277,10 @@ public:
 	bool isBool;
 
 	types type;
+	string arr_type;
 	string value;
 	string stringLable;
+	bool is_array;
 	int lineno;
 
 private:
@@ -300,9 +306,10 @@ public:
 	Exp(string opa, Node_ptr onlySon, string opb, int lineno);
 
 	Exp(string op, Node_ptr onlySon, int lineno);
+	//======================= ARRAY =======================
+	// TODO: array
+	Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno);
 };
-
-
 
 void FuncDeclPartOne(Node_ptr retType_p, Node_ptr id_p, int lineno);
 void FuncDeclPartTwo(Node_ptr id_p, Node_ptr formals_p, int lineno);
@@ -312,8 +319,6 @@ void CheckNumExpression(Node_ptr exp_p, int lineno);
 void checkReturnTypeValidity(Node_ptr retType_p , Node_ptr statement_p, int lineno);
 
 void closeFunctionScope();
-
-
 
 #define YYSTYPE Node*
 

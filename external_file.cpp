@@ -9,6 +9,8 @@
 #include "external_file.hpp"
 #include <sstream>
 #include <algorithm>
+#include "util.hpp"
+
 #include "genAssembly.hpp"
 #include "bp.hpp"
 
@@ -17,6 +19,8 @@
 //#define STACK_OFFSET_UPDATE  "80"
 //#define STACK_OFFSET_UPDATE_INT  80
 using namespace std;
+extern SymbolsTable st;
+extern int program_main;
 
 
 extern CodeBuffer&  cb;
@@ -48,18 +52,18 @@ void evalExp(Node_ptr exp_p){
 	}
 //	cb.emit("#EVAL EXP START");
 	//cb.emit("#TEST >> exp is boolean");
-	string trueLine = cb.next();
+	string trueLine = cb.genLabel();
 	Register r = rp.regAlloc();
 	exp->setReg(r);
 	cb.emit("li " + r.getName() + ", 1");
 	int nextLineTrue = cb.emit("j ");
 	cb.bpatch(exp->truelist,trueLine);
-	string falseLine = cb.next();
+	string falseLine = cb.genLabel();
 	cb.emit("li " + r.getName() + ", 0");
 	int nextLineFalse = cb.emit("j ");
 
 	cb.bpatch(exp->falselist,falseLine);
-	string psudo_quad = cb.next();
+	string psudo_quad = cb.genLabel();
 	cb.bpatch(cb.makelist(nextLineTrue),psudo_quad);
 	cb.bpatch(cb.makelist(nextLineFalse),psudo_quad);
 //	cb.emit("#EVAL EXP END");
@@ -808,8 +812,8 @@ Node_ptr Node::getSon(int idx){
 
 
 	}
-
-	Exp::Exp(Node_ptr onlySon, int lineno):Node(2),type(UNDEF_t),value(""),lineno(lineno),isBool(false){
+	// TODO: added is_array
+	Exp::Exp(Node_ptr onlySon, int lineno):Node(2),type(UNDEF_t),value(""),lineno(lineno),isBool(false),is_array(false){
 		Exp* son = static_cast<Exp*>(onlySon);
 
 		if (son->type!=BOOL_t){
@@ -849,7 +853,7 @@ Node_ptr Node::getSon(int idx){
 	}
 
 	Exp::Exp(string opa, Node_ptr onlySon, string opb, int lineno):Node(3),type(UNDEF_t),
-			value(""),lineno(lineno),isBool(false){
+			value(""),lineno(lineno),isBool(false),is_array(false){
 		Exp* son = static_cast<Exp*>(onlySon);
 
 		this->type=son->type;
@@ -972,6 +976,11 @@ Node_ptr Node::getSon(int idx){
 					if (type==BOOL_t){
 						isBool = true;
 					}
+					// TODO: added if
+					if(isArray(temp->type)){
+						arr_type = temp->type;
+						is_array = true;
+					}
 				}
 				//this will tell the program that the place of this exp is already allocated bc its ID
 				//setPlace(st.getName(son->val)->offSet);
@@ -992,19 +1001,37 @@ Node_ptr Node::getSon(int idx){
 
 	}
 
-//===========implementing M ========
-	M::M():Node(0){
-		db_name = 55;
-		quad  = cb.next();
-		//////cout << "M::M() quad [" << quad << "]" << endl;
+Exp::Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno):Node(2),is_array(false){
+	this->lineno = lineno;
+	Ter* id = static_cast<Ter*>(id_p);
+	Exp* arr_idx = static_cast<Exp*>(arr_idx_p);
+	if (!st.isNameDefined(id->val)){
+		output::errorDef(lineno,id->val);
+		st.set_prints(false); exit(0);
 	}
+	const Name* arr = st.getName(id->val);
+	this->type = stringToType(getArrType(arr->type));
+	if(arr_idx->type != INT_t && arr_idx->type != BYTE_t){
+		output::errorMismatch(lineno);
+		st.set_prints(false); exit(0);
+	}
+	setSon(0,id);
+	setSon(1,arr_idx);
+}
 
+
+//===========implementing M ========
+M::M():Node(0){
+	db_name = 55;
+	quad  = cb.genLabel();
+	//////cout << "M::M() quad [" << quad << "]" << endl;
+}
 //===========implementing N ========
-	N::N():Node(0){
-		db_name = 1;
-		int gotoLine = cb.emit("j ");
-		nextList = cb.makelist(gotoLine);
-	}
+N::N():Node(0){
+	db_name = 1;
+	int gotoLine = cb.emit("j ");
+	nextList = cb.makelist(gotoLine);
+}
 
 //============implemeting ExpList ========
 ExpList::ExpList(Node_ptr exp_p, int lineno):Node(1){
@@ -1012,10 +1039,13 @@ ExpList::ExpList(Node_ptr exp_p, int lineno):Node(1){
 		Exp* exp = static_cast<Exp*>(exp_p);
 		this->size=1;
 		this->type=exp->type;
-		string temp = typeToString(exp->type);
-		myList.insert(myList.begin(),temp);
-		setSon(0,exp);
+		string actual_type = typeToString(exp->type);
+		if(exp->is_array){
+			actual_type = exp->arr_type;
+		}
 
+		myList.insert(myList.begin(),actual_type);
+		setSon(0,exp);
 	}
 ExpList::ExpList(Node_ptr exp_p, Node_ptr explist_p, int lineno):Node(3){
 	db_name = 23;
@@ -1023,9 +1053,13 @@ ExpList::ExpList(Node_ptr exp_p, Node_ptr explist_p, int lineno):Node(3){
 		ExpList* explist = static_cast<ExpList*>(explist_p);
 		this->size=explist->size+1;
 		this->type=UNDEF_t;
-		string temp = typeToString(exp->type);
+		//string temp = typeToString(exp->type);
 		myList = explist->myList;
-		myList.insert(myList.begin(),temp);
+		string actual_type = typeToString(exp->type);
+		if(exp->is_array){
+			actual_type = exp->arr_type;
+		}
+		myList.insert(myList.begin(),actual_type);
 		Ter* comma = new Ter(",","COMMA");
 		setSon(0,exp);
 		setSon(1,comma);
@@ -1196,8 +1230,27 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 		Ter* ass = new Ter("=",op);
 		Exp* exp = static_cast<Exp*>(exp_p);
 		if (st.isNameDefined(id->val)){
-			const Name* temp = st.getName(id->val);
+			const Name* temp = st.getName(id->val); //temp = LHS , exp = RHS : temp = exp ;
 			types tempType = stringToType(temp->type);
+			// TODO: if chunk
+			if(isArray(temp->type)){
+//				cout << "DEBUG: before is_array(exp)" << endl;
+				if(exp->is_array){
+//					cout << "DEBUG: exp IS array" << endl;
+//					cout << "DEBUG exp->arr_type: "+ exp->arr_type <<endl;
+//					cout << "DEBUG temp->arr_type: "+ temp->type <<endl;
+					if(exp->arr_type != temp->type){
+//						cout << "exp->arr_type != temp->type : true"<< endl;
+
+						output::errorMismatch(lineno);
+						st.set_prints(false); exit(0);
+					}
+				} else {
+					output::errorMismatch(lineno);
+					st.set_prints(false); exit(0);
+				}
+
+			}
 			if(temp->type == "func"){
 				output::errorUndef(lineno , id->val);
 				st.set_prints(false); exit(0);
@@ -1247,13 +1300,13 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 			cb.emit("sw " + r.getName() + ", " + offset + "($fp)");
 		} else {
 			r = rp.regAlloc(); // TODO: check this as well
-			string truelabel = cb.next();
+			string truelabel = cb.genLabel();
 			cb.emit("li " + r.getName() + ", 1");
 			int endtrue = cb.emit("j ");
-			string falselabel = cb.next();
+			string falselabel = cb.genLabel();
 			cb.emit("li " + r.getName() + ", 0");
 			int endfalse = cb.emit("j ");
-			string endline = cb.next();
+			string endline = cb.genLabel();
 			cb.emit("sw " + r.getName() + ", " + offset + "($fp)");
 			cb.bpatch(exp->truelist,truelabel);
 			cb.bpatch(exp->falselist,falselabel);
@@ -1371,7 +1424,7 @@ Statement::Statement(string op1, Node_ptr exp_p, Node_ptr caselist_p, string op2
 		Ter* sc = new Ter(";","SC");
 		N* n = static_cast<N*>(N_marker);
 		N* m = static_cast<N*>(marker);
-		cb.bpatch(n->nextList,cb.next());
+		cb.bpatch(n->nextList,cb.genLabel());
 		int value;
 		string quad;
 		Register r1;
@@ -1416,12 +1469,12 @@ Statement::Statement(string op1, Node_ptr exp_p, Node_ptr caselist_p, string op2
 		} else {
 			rp.regRelease(r1);
 		}
-		cb.next();
+		cb.genLabel();
 		this->nextList=caselist->nextList;
 		if (caselist->default_count>0){
 			cb.emit(string("j ")+caselist->default_label);
 		}
-		cb.bpatch(cb.merge(m->nextList,caselist->breakList),cb.next());
+		cb.bpatch(cb.merge(m->nextList,caselist->breakList),cb.genLabel());
 
 		setSon(0,sw);
 		setSon(1,lparen);
@@ -1514,13 +1567,13 @@ Statement::Statement(Node_ptr type_p, Node_ptr id_p, Node_ptr exp_p, int lineno)
 			cb.emit("subu $sp, $sp, 4");
 		} else {
 			r = rp.regAlloc(); // TODO: check this as well
-			string truelabel = cb.next();
+			string truelabel = cb.genLabel();
 			cb.emit("li " + r.getName() + ", 1");
 			int endtrue = cb.emit("j ");
-			string falselabel = cb.next();
+			string falselabel = cb.genLabel();
 			cb.emit("li " + r.getName() + ", 0");
 			int endfalse = cb.emit("j ");
-			string endline = cb.next();
+			string endline = cb.genLabel();
 			cb.emit("sw " + r.getName() + ", ($sp)");
 			cb.emit("subu $sp, $sp, 4");
 			cb.bpatch(exp->truelist,truelabel);
@@ -1557,6 +1610,7 @@ Statement::Statement(Node_ptr if_p, Node_ptr sb_p, int lineno, int twice,Node_pt
 				return_types.insert(return_types.end(),stb->return_types.begin(),stb->return_types.end());
 			}
 		}
+		// TODO: 1 changed to 0 a long time ago...
 		Exp* exp = static_cast<Exp*>(statementif->getSon(0));
 		Statement* st = static_cast<Statement*>(statementif->getSon(1));
 		Ter* start = new Ter("IF","IF");
@@ -1595,31 +1649,68 @@ Statement::Statement(Node_ptr if_p, Node_ptr sb_p, int lineno, int twice,Node_pt
 		setSon(5,end);
 		setSon(6,stb);
 	}
+// TODO: added following 2 functions
+Statement::Statement(Node_ptr type_p , Node_ptr id_p , Node_ptr arr_size_p , string rule , int lineno):Node(3){
+	is_return=false;
+	is_break=false;
+	is_emidiate_return=false;
+	Ter* arr_size = static_cast<Ter*>(arr_size_p);
+	Ter* id = static_cast<Ter*>(id_p);
+	Type* type = static_cast<Type*>(type_p);
+	if (st.isNameDefined(id->val)){
+				output::errorDef(lineno,id->val);
+				st.set_prints(false); exit(0);
+	}
+	if(rule == "Type ID LBRACK NUM B RBRACK SC"){
+		//validate arr_size is not over 255
+		if(atoi( arr_size->val.c_str())>255){
+			output::errorByteTooLarge(lineno,arr_size->val);
+			st.set_prints(false); exit(0);
+		}
+	}
+	if(atoi( arr_size->val.c_str())>255){
+		output::errorInvalidArraySize(lineno,id->val);
+		st.set_prints(false); exit(0);
+	}
+	if(atoi( arr_size->val.c_str())<=0){
+		output::errorInvalidArraySize(lineno,id->val);
+		st.set_prints(false); exit(0);
+	}
+	st.addNameable(Name(id->val,type->str + "_" + arr_size->val));
+	setSon(0,type);
+	setSon(1,id);
+	setSon(2,arr_size);
+}
 
+Statement::Statement(Node_ptr id_p , Node_ptr arr_idx_p , Node_ptr exp2_p , string rule , string dummy , int lineno):Node(3){
+	is_return=false;
+	is_break=false;
+	is_emidiate_return=false;
+	Ter* id = static_cast<Ter*>(id_p);
+	Exp* arr_idx = static_cast<Exp*>(arr_idx_p);
+	Exp* exp2 = static_cast<Exp*>(exp2_p);
+	if (!st.isNameDefined(id->val)){
+		output::errorUndef(lineno,id->val);
+		st.set_prints(false); exit(0);
+	}
+	const Name* arr = st.getName(id->val);
+	if(arr_idx->type != INT_t && arr_idx->type != BYTE_t){ // THE ARRAY INDEX IS NOT OF NUMERIC TYPE, arr[blabla]
+		output::errorMismatch(lineno);
+		st.set_prints(false); exit(0);
+	}
+	if (!(exp2->type == stringToType(getArrType(arr->type))
+			|| (exp2->type == BYTE_t
+					&& stringToType(getArrType(arr->type)) == INT_t))) {
+		output::errorMismatch(lineno);
+		st.set_prints(false); exit(0);
+	}
+	setSon(0,id);
+	setSon(1,arr_idx);
+	setSon(2,exp2);
+}
 
 // ============= implementing Statements ========
-//Statements::Statements(Node_ptr statement_p, int lineno,Node_ptr M_marker ):Node(1){
-//		is_break=false;
-//		is_return=false;
-//		return_types = list<pair<types,int> >() ;
-//		Statement* statement = static_cast<Statement*>(statement_p);
-//		if (statement->is_break){
-//			this->is_break=true;
-//			this->ln=statement->ln;
-//		}
-//		if (statement->is_return){
-//			this->is_return=true;
-//			if (!(statement->return_types.size()==0)){
-//				this->return_types.insert(this->return_types.end(), statement->return_types.begin(), statement->return_types.end());
-//			}
-//		}
-//		M* m = static_cast<M*>(M_marker);
-//		cb.bpatch(statement->nextList,m->quad);
-//		nextList = statement->nextList;
-//
-//		setSon(0,statement);
-//	}
-Statements::Statements(Node_ptr statement_p, int lineno ):Node(1){
+Statements::Statements(Node_ptr statement_p, int lineno):Node(1){
 	db_name = 60;
 		is_break=false;
 		is_return=false;
@@ -1638,24 +1729,9 @@ Statements::Statements(Node_ptr statement_p, int lineno ):Node(1){
 
 		nextList = statement->nextList;
 		breakList = statement->breakList;
-//		////cout << "nextlist L - > S" <<  endl;
-//		for(int i ; i < nextList.size() ; i++){
-//			////cout << "nextlist L - > S" << nextList[i] << endl;
-//		}
 		setSon(0,statement);
 	}
 Statements::Statements(Node_ptr statements_p, Node_ptr statement_p, int lineno, Node_ptr M_marker):Node(2){
-//		////cout <<" Statements ======> Statements statement" << endl;
-//		////cout<< "||| Statement_s nextListSize " << statements_p->nextList.size()<< endl;
-//		if(statements_p->nextList.size() > 0){
-//			////cout << statements_p->nextList[0] << endl;
-//			////cout << "quad "<< static_cast<M*>(M_marker)->quad <<endl;
-//		}
-//		////cout<< "||| Statement nextListSize " << statement_p->nextList.size()<< endl;
-//		if(statement_p->nextList.size() > 0){
-//			////cout << statement_p->nextList[0] << endl;
-//
-//		}
 //		////cout <<"END Statements ======> Statements statement END" << endl;
 	db_name = 61;
 		is_break=false;
@@ -1710,9 +1786,7 @@ Statements::Statements(Node_ptr statements_p, Node_ptr statement_p, int lineno, 
 		//cb.printCodeBuffer();
 		setSon(0,statements);
 		setSon(1,statement);
-
 	}
-
 
 
 //================implementing FuncDecl
@@ -1750,6 +1824,8 @@ FuncDecl::FuncDecl(Node_ptr rettype_p, Node_ptr id_p, Node_ptr formals_p, Node_p
 		if (id->val=="main" && rettype->is_void && formals->is_empty){ // can i assume that main is written in lower case letters?
 			this->is_main=true;
 		}
+		f_name = id->val;
+		//cout << "DEBUG : [FUNCDECL]" + f_name << endl;
 //		Name* funcName= st.getNoneConstName(id->val);
 //		funcName->update(formals->decl);
 //		st.setFuncParams(formals->decl);
@@ -1781,6 +1857,11 @@ Funcs::Funcs(Node_ptr funcdecl_p, Node_ptr funcs_p, int lineno):Node(2){
 		if (funcdecl->is_main || funcs->is_main){
 			this->is_main=true;
 		}
+		f_list = "" +
+				funcs->f_list +
+				", " + funcdecl->f_name;
+		//cout << "DEBUG: [FUNCS] " + f_list << endl;
+		//cout << "DEBUG [FUNCS]  " + funcdecl->f_name << endl;
 		setSon(0,funcdecl);
 		setSon(1,funcs);
 	}
@@ -1794,9 +1875,12 @@ Funcs::Funcs(int lineno):Node(){
 Program::Program(Node_ptr funcs_p, int lineno):Node(1){
 	db_name = 90;
 		Funcs* funcs = static_cast<Funcs*>(funcs_p);
-		if (!(funcs->is_main)){
-			output::errorMainMissing();
-			st.set_prints(false); exit(0);
+//		if (!(funcs->is_main)){
+//			output::errorMainMissing();
+//			st.set_prints(false); exit(0);
+//		}
+		if (funcs->is_main){
+			program_main = 1;
 		}
 		setSon(0,funcs);
 		createPrinters();
@@ -1827,7 +1911,6 @@ RetType::RetType(int lineno):Node(1){
 
 //====== implementing Formals
 Formals::Formals(Node_ptr formalslist_p, int lineno):Node(1){
-
 		is_empty = false;
 		FormalsList* formalslist = static_cast<FormalsList*>(formalslist_p);
 		this->decl = formalslist->decl;
@@ -1874,12 +1957,44 @@ FormalDecl::FormalDecl(Node_ptr type_p, Node_ptr id_p, int lineno):Node(2){
 		setSon(0,type);
 		setSon(1,id);
 	}
-
-
+// TODO: added this function
+FormalDecl::FormalDecl(Node_ptr type_p, Node_ptr id_p , Node_ptr arr_size_p , string rule , int lineno):Node(3){
+	Type* type = static_cast<Type*>(type_p);
+	Ter* id = static_cast<Ter*>(id_p);
+	Ter* arr_size = static_cast<Ter*>(arr_size_p);
+	if (st.isNameDefined(id->val)) {
+		output::errorDef(lineno, id->val);
+		st.set_prints(false);
+		exit(0);
+	}
+	if (rule == "Type ID LBRACK NUM B RBRACK") {
+		//validate arr_size is not over 255
+		if (atoi(arr_size->val.c_str()) > 255) {
+			output::errorByteTooLarge(lineno, arr_size->val);
+			st.set_prints(false);
+			exit(0);
+		}
+	}
+	if (atoi(arr_size->val.c_str()) > 255) {
+		output::errorInvalidArraySize(lineno, id->val);
+		st.set_prints(false);
+		exit(0);
+	}
+	if (atoi(arr_size->val.c_str()) <= 0) {
+		output::errorInvalidArraySize(lineno, id->val);
+		st.set_prints(false);
+		exit(0);
+	}
+	this->nameable = pair<string,string>(type->str + "_" + arr_size->val,id->val);
+	//st.addNameable(Name(id->val,type->str + "_" + arr_size->val));
+	setSon(0,id);
+	setSon(1,type);
+	setSon(2,arr_size);
+}
 
 
 //========== implementing CaseList
-
+// TODO: remove all switch case handling
 int maxilin(int ln1, int ln2){
 	if (ln1>ln2){
 		return ln1;
@@ -1889,102 +2004,102 @@ int maxilin(int ln1, int ln2){
 }
 
 CaseList::CaseList(Node_ptr casestatement_p, int lineno):Node(1){
-		default_count=0;
-		CaseStatement* casestatement = static_cast<CaseStatement*>(casestatement_p);
-		this->default_count=casestatement->default_count;
-		if (default_count){
-			this->ln=casestatement->ln1;
-			this->default_label = casestatement->default_label;
-		} else {
-			this->ln=-1;
-		}
-		list<string> ls;
-		list<int> li;
-		this->quad_list = ls;
-		this->value_list = li;
-		if (casestatement->default_count==0){
-			this->quad_list.push_front(casestatement->quad);
-			this->value_list.push_front(casestatement->value);
-		}
-		this->nextList=casestatement->nextList;
-		breakList = casestatement->breakList;
-		setSon(0,casestatement);
+	default_count=0;
+	CaseStatement* casestatement = static_cast<CaseStatement*>(casestatement_p);
+	this->default_count=casestatement->default_count;
+	if (default_count){
+		this->ln=casestatement->ln1;
+		this->default_label = casestatement->default_label;
+	} else {
+		this->ln=-1;
 	}
+	list<string> ls;
+	list<int> li;
+	this->quad_list = ls;
+	this->value_list = li;
+	if (casestatement->default_count==0){
+		this->quad_list.push_front(casestatement->quad);
+		this->value_list.push_front(casestatement->value);
+	}
+	this->nextList=casestatement->nextList;
+	breakList = casestatement->breakList;
+	setSon(0,casestatement);
+}
 CaseList::CaseList(Node_ptr caselist_p, Node_ptr casestatement_p, int lineno):Node(2){
-		default_count=0;
-		CaseList* caselist = static_cast<CaseList*>(caselist_p);
-		CaseStatement* casestatement = static_cast<CaseStatement*>(casestatement_p);
-		bool default_flag=false;
-		this->default_count = casestatement->default_count + caselist->default_count;
-		if (this->default_count>1){
-			int temp = maxilin(casestatement->ln1,caselist->ln);
-			output::errorTooManyDefaults(temp);
-			st.set_prints(false); exit(0);
-		} else {
-			if (casestatement->ln1>0){
-				this->ln = casestatement->ln1;
-				this->default_label = casestatement->default_label;
-				default_flag=true;
-			} else if (caselist->ln>0){
-				this->ln = caselist->ln;
-				this->default_label=caselist->default_label;
-			}
+	default_count=0;
+	CaseList* caselist = static_cast<CaseList*>(caselist_p);
+	CaseStatement* casestatement = static_cast<CaseStatement*>(casestatement_p);
+	bool default_flag=false;
+	this->default_count = casestatement->default_count + caselist->default_count;
+	if (this->default_count>1){
+		int temp = maxilin(casestatement->ln1,caselist->ln);
+		output::errorTooManyDefaults(temp);
+		st.set_prints(false); exit(0);
+	} else {
+		if (casestatement->ln1>0){
+			this->ln = casestatement->ln1;
+			this->default_label = casestatement->default_label;
+			default_flag=true;
+		} else if (caselist->ln>0){
+			this->ln = caselist->ln;
+			this->default_label=caselist->default_label;
 		}
-		this->quad_list=caselist->quad_list;
-		this->value_list=caselist->value_list;
-		if (!(default_flag)){
-			this->quad_list.push_front(casestatement->quad);
-			this->value_list.push_front(casestatement->value);
-		}
-		this->nextList=cb.merge(caselist->nextList,casestatement->nextList);
-		breakList = cb.merge(caselist->breakList, casestatement->breakList);
-
-		setSon(0,caselist);
-		setSon(1,casestatement);
 	}
+	this->quad_list=caselist->quad_list;
+	this->value_list=caselist->value_list;
+	if (!(default_flag)){
+		this->quad_list.push_front(casestatement->quad);
+		this->value_list.push_front(casestatement->value);
+	}
+	this->nextList=cb.merge(caselist->nextList,casestatement->nextList);
+	breakList = cb.merge(caselist->breakList, casestatement->breakList);
+
+	setSon(0,caselist);
+	setSon(1,casestatement);
+}
 //
 
 
 //==========implementing caseStatements
 CaseStatement::CaseStatement(Node_ptr casedec_p, int lineno):Node(1){
-		default_count=0;
-		this->ln1=-1;
-		CaseDec* casedec = static_cast<CaseDec*>(casedec_p);
-		if(casedec->default_count!=0){
-			this->default_count++;
-			this->ln1=casedec->ln;
-			this->default_label = casedec->default_label;
-		}
-		setSon(0,casedec);
+	default_count=0;
+	this->ln1=-1;
+	CaseDec* casedec = static_cast<CaseDec*>(casedec_p);
+	if(casedec->default_count!=0){
+		this->default_count++;
+		this->ln1=casedec->ln;
+		this->default_label = casedec->default_label;
 	}
+	setSon(0,casedec);
+}
 CaseStatement::CaseStatement(Node_ptr casedec_p, Node_ptr statements_p, int lineno , Node_ptr marker):Node(2){
-		default_count=0;
-		this->ln1=-1;
-		CaseDec* casedec = static_cast<CaseDec*>(casedec_p);
-		Statements* statements = static_cast<Statements*>(statements_p);
-		if(casedec->default_count!=0){
-			this->default_count++;
-			this->ln1=casedec->ln;
-			this->default_label = casedec->default_label;
-		}
-		M* m = static_cast<M*>(marker);
-		this->quad=m->quad;
-		if (casedec->numberOfSons>2){
-			Ter* num = static_cast<Ter*>(casedec->getSon(1));
-			this->value=atoi(num->getVal().c_str());
-		}
-		this->nextList=statements->nextList;
-		breakList = statements->breakList;
-		setSon(0,casedec);
-		setSon(1,statements);
+	default_count=0;
+	this->ln1=-1;
+	CaseDec* casedec = static_cast<CaseDec*>(casedec_p);
+	Statements* statements = static_cast<Statements*>(statements_p);
+	if(casedec->default_count!=0){
+		this->default_count++;
+		this->ln1=casedec->ln;
+		this->default_label = casedec->default_label;
 	}
+	M* m = static_cast<M*>(marker);
+	this->quad=m->quad;
+	if (casedec->numberOfSons>2){
+		Ter* num = static_cast<Ter*>(casedec->getSon(1));
+		this->value=atoi(num->getVal().c_str());
+	}
+	this->nextList=statements->nextList;
+	breakList = statements->breakList;
+	setSon(0,casedec);
+	setSon(1,statements);
+}
 
 //===========IMPLEMENTING CaseDec
 CaseDec::CaseDec(int lineno):Node(2){
 		default_count=0;
 		Ter* deft = new Ter("default","DEFAULT");
 		Ter* colon = new Ter("colon", "COLON");
-		this->default_label = cb.next();
+		this->default_label = cb.genLabel();
 		this->default_count = 1;
 		this->ln = lineno;
 		setSon(0,deft);
@@ -2043,7 +2158,8 @@ void FuncDeclPartTwo(Node_ptr id_p, Node_ptr formals_p, int lineno){
 	//TODO: remove the prints
 	funcName->update(
 			formals->decl);
-	st.setFuncParams(formals->decl);
+	// TODO: added lineno param
+	st.setFuncParams(formals->decl,lineno);
 }
 
 
