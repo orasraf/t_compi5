@@ -12,7 +12,7 @@ CodeBuffer &CodeBuffer::instance() {
 	return inst;
 }
 
-string CodeBuffer::next(){
+string CodeBuffer::genLabel(){
 	std::stringstream label;
 	label << "label_";
 	label << buffer.size();
@@ -29,10 +29,8 @@ int CodeBuffer::emit(const string &s){
 
 void CodeBuffer::bpatch(const vector<int>& l, const std::string &label){
     for(vector<int>::const_iterator i = l.begin(); i != l.end(); i++){
-    	cout << "#DB [" << label <<"]" << endl;
 		buffer[*i] += label;
     }
-
 }
 
 void CodeBuffer::printCodeBuffer(){

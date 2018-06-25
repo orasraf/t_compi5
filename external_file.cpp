@@ -397,9 +397,25 @@ Node_ptr Node::getSon(int idx){
 				vector<string>::iterator expIt = expTypes.begin();
 				vector<string> paramList;
 				bool errType = false;
-				if (myName->numerOfParams != expTypes.size()){
-					errType=true;
+
+//				cout << "num of params " << expTypes.size()  << endl;
+//				cout << "expected == " << endl;
+//				for(int i=0 ; i< myName->numerOfParams; i++){
+//					cout << "param " << i << " : " << myName->parameters[i].first << endl;
+//				}
+//				cout << "actual == " << endl;
+//				for(int i=0 ; i< myName->numerOfParams; i++){
+//					cout << "param " << i << " : " << expTypes[i] << "str size: " << expTypes[i].size() << endl;
+//				}
+				if(myName->numerOfParams != expTypes.size()){
+						vector<string> fuck;
+						for(int i = 0 ; i < myName->numerOfParams ; i++){
+							fuck.push_back(myName->parameters[i].first);
+						}
+						output::errorPrototypeMismatch(lineno,id->val,fuck);
+						st.set_prints(false); exit(0);
 				}
+
 				for(int i=0 ; i< myName->numerOfParams; i++){
 					paramList.push_back(myName->parameters[i].first);
 					if (myName->parameters[i].first!=(*expIt)){
@@ -407,9 +423,9 @@ Node_ptr Node::getSon(int idx){
 							errType=true;
 						}
 					}
-					if (expIt!=expTypes.end()){
-						expIt++;
-					}
+
+					expIt++;
+
 				}
 				if (errType){
 					output::errorPrototypeMismatch(lineno,id->val,paramList);
@@ -739,7 +755,8 @@ Node_ptr Node::getSon(int idx){
 
 	Exp::Exp(string op , Node_ptr leftNode , Node_ptr rightNode, int lineno ,Node_ptr marker):
 		Node(3),type(UNDEF_t),value(""),lineno(lineno),isBool(false){
-
+		isBool = false;
+		is_array = false;
 		Exp* left = static_cast<Exp*>(leftNode);
 		Exp* right = static_cast<Exp*>(rightNode);
 		M* m = static_cast<M*>(marker);
@@ -816,6 +833,7 @@ Node_ptr Node::getSon(int idx){
 	Exp::Exp(Node_ptr onlySon, int lineno):Node(2),type(UNDEF_t),value(""),lineno(lineno),isBool(false),is_array(false){
 		Exp* son = static_cast<Exp*>(onlySon);
 
+		is_array = false;
 		if (son->type!=BOOL_t){
 			output::errorMismatch(lineno);
 			st.set_prints(false); exit(0);
@@ -854,6 +872,7 @@ Node_ptr Node::getSon(int idx){
 
 	Exp::Exp(string opa, Node_ptr onlySon, string opb, int lineno):Node(3),type(UNDEF_t),
 			value(""),lineno(lineno),isBool(false),is_array(false){
+		is_array = false;
 		Exp* son = static_cast<Exp*>(onlySon);
 
 		this->type=son->type;
@@ -880,7 +899,7 @@ Node_ptr Node::getSon(int idx){
 
 	Exp::Exp(string op, Node_ptr onlySon, int lineno):Node(1),type(UNDEF_t),value(""),lineno(lineno),isBool(false){
 		string toEmit="";
-
+		is_array = false;
 		if (op=="Call"){
 			Call* son = static_cast<Call*>(onlySon);
 			db_name = son->db_name;
@@ -1002,6 +1021,8 @@ Node_ptr Node::getSon(int idx){
 	}
 
 Exp::Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno):Node(2),is_array(false){
+	is_array = false;
+	isBool = false;
 	this->lineno = lineno;
 	Ter* id = static_cast<Ter*>(id_p);
 	Exp* arr_idx = static_cast<Exp*>(arr_idx_p);
@@ -1009,7 +1030,13 @@ Exp::Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno):Node(2),is
 		output::errorDef(lineno,id->val);
 		st.set_prints(false); exit(0);
 	}
+
+
 	const Name* arr = st.getName(id->val);
+	if(!isArray(arr->type)){
+		output::errorMismatch(lineno);
+		st.set_prints(false); exit(0);
+	}
 	this->type = stringToType(getArrType(arr->type));
 	if(arr_idx->type != INT_t && arr_idx->type != BYTE_t){
 		output::errorMismatch(lineno);
@@ -1040,6 +1067,7 @@ ExpList::ExpList(Node_ptr exp_p, int lineno):Node(1){
 		this->size=1;
 		this->type=exp->type;
 		string actual_type = typeToString(exp->type);
+
 		if(exp->is_array){
 			actual_type = exp->arr_type;
 		}
@@ -1157,6 +1185,7 @@ Statement::Statement(string kind, Node_ptr b_p, int lineno):Node(3){
 		} else {
 			a = new Ter("return","RETURN");
 			Exp *b2 = static_cast<Exp*>(b_p);
+
 			c = new Ter(";","SC");
 			this->is_return = true;
 			pair<types,int> a = make_pair(b2->type,lineno);
@@ -1510,7 +1539,9 @@ Statement::Statement(Node_ptr type_p, Node_ptr id_p, Node_ptr exp_p, int lineno)
 			const Name* temp = st.getName(id->val);
 				if(temp==NULL){
 				}
+
 				types tempType = stringToType(temp->type);
+
 			if (tempType==BYTE_t){
 				if (atoi(exp->value.c_str())>255){
 					output::errorByteTooLarge(lineno,exp->value);
@@ -1695,6 +1726,10 @@ Statement::Statement(Node_ptr id_p , Node_ptr arr_idx_p , Node_ptr exp2_p , stri
 	}
 	const Name* arr = st.getName(id->val);
 	if(arr_idx->type != INT_t && arr_idx->type != BYTE_t){ // THE ARRAY INDEX IS NOT OF NUMERIC TYPE, arr[blabla]
+		output::errorMismatch(lineno);
+		st.set_prints(false); exit(0);
+	}
+	if(!isArray(arr->type)){
 		output::errorMismatch(lineno);
 		st.set_prints(false); exit(0);
 	}
@@ -2025,108 +2060,9 @@ CaseList::CaseList(Node_ptr casestatement_p, int lineno):Node(1){
 	breakList = casestatement->breakList;
 	setSon(0,casestatement);
 }
-CaseList::CaseList(Node_ptr caselist_p, Node_ptr casestatement_p, int lineno):Node(2){
-	default_count=0;
-	CaseList* caselist = static_cast<CaseList*>(caselist_p);
-	CaseStatement* casestatement = static_cast<CaseStatement*>(casestatement_p);
-	bool default_flag=false;
-	this->default_count = casestatement->default_count + caselist->default_count;
-	if (this->default_count>1){
-		int temp = maxilin(casestatement->ln1,caselist->ln);
-		output::errorTooManyDefaults(temp);
-		st.set_prints(false); exit(0);
-	} else {
-		if (casestatement->ln1>0){
-			this->ln = casestatement->ln1;
-			this->default_label = casestatement->default_label;
-			default_flag=true;
-		} else if (caselist->ln>0){
-			this->ln = caselist->ln;
-			this->default_label=caselist->default_label;
-		}
-	}
-	this->quad_list=caselist->quad_list;
-	this->value_list=caselist->value_list;
-	if (!(default_flag)){
-		this->quad_list.push_front(casestatement->quad);
-		this->value_list.push_front(casestatement->value);
-	}
-	this->nextList=cb.merge(caselist->nextList,casestatement->nextList);
-	breakList = cb.merge(caselist->breakList, casestatement->breakList);
-
-	setSon(0,caselist);
-	setSon(1,casestatement);
-}
 //
 
 
-//==========implementing caseStatements
-CaseStatement::CaseStatement(Node_ptr casedec_p, int lineno):Node(1){
-	default_count=0;
-	this->ln1=-1;
-	CaseDec* casedec = static_cast<CaseDec*>(casedec_p);
-	if(casedec->default_count!=0){
-		this->default_count++;
-		this->ln1=casedec->ln;
-		this->default_label = casedec->default_label;
-	}
-	setSon(0,casedec);
-}
-CaseStatement::CaseStatement(Node_ptr casedec_p, Node_ptr statements_p, int lineno , Node_ptr marker):Node(2){
-	default_count=0;
-	this->ln1=-1;
-	CaseDec* casedec = static_cast<CaseDec*>(casedec_p);
-	Statements* statements = static_cast<Statements*>(statements_p);
-	if(casedec->default_count!=0){
-		this->default_count++;
-		this->ln1=casedec->ln;
-		this->default_label = casedec->default_label;
-	}
-	M* m = static_cast<M*>(marker);
-	this->quad=m->quad;
-	if (casedec->numberOfSons>2){
-		Ter* num = static_cast<Ter*>(casedec->getSon(1));
-		this->value=atoi(num->getVal().c_str());
-	}
-	this->nextList=statements->nextList;
-	breakList = statements->breakList;
-	setSon(0,casedec);
-	setSon(1,statements);
-}
-
-//===========IMPLEMENTING CaseDec
-CaseDec::CaseDec(int lineno):Node(2){
-		default_count=0;
-		Ter* deft = new Ter("default","DEFAULT");
-		Ter* colon = new Ter("colon", "COLON");
-		this->default_label = cb.genLabel();
-		this->default_count = 1;
-		this->ln = lineno;
-		setSon(0,deft);
-		setSon(1,colon);
-	}
-CaseDec::CaseDec(Node_ptr num_p, int lineno):Node(3){
-		default_count=0;
-		this->ln=-1;
-		Ter* num = static_cast<Ter*>(num_p);
-		Ter* cse = new Ter("case","CASE");
-		Ter* colon = new Ter("colon","COLON");
-		setSon(0,cse);
-		setSon(1,num);
-		setSon(2,colon);
-	}
-CaseDec::CaseDec(string a, Node_ptr num_p, int lineno):Node(4){
-		default_count=0;
-		this->ln=-1;
-		Ter* num = static_cast<Ter*>(num_p);
-		Ter* cse = new Ter("case","CASE");
-		Ter* colon = new Ter("colon","COLON");
-		Ter* b = new Ter(a,a);
-		setSon(0,cse);
-		setSon(1,num);
-		setSon(2,b);
-		setSon(3,colon);
-	}
 
 
 void FuncDeclPartOne(Node_ptr retType_p, Node_ptr id_p, int lineno){
