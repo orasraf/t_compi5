@@ -69,13 +69,19 @@ void evalExp(Node_ptr exp_p){
 //	cb.emit("#EVAL EXP END");
 }
 
-string getStackOffset(Ter* id){
+string getStackOffset(Ter* id, string arr_idx = "" ){
 	int address = st.getName(id->val)->offSet*4;
+	if(arr_idx.size() > 0 ){
+		int idx = atoi(arr_idx.c_str());
+		address += idx * 4 ;
+	}
 	string negative=my_fucking_itoa(address,true);
 	string sign = address>0?"-":"";
 	string offset = sign + negative ;
 	return offset;
 }
+
+
 int getNumberOfArgs(ExpList* expList_p){
 	bool last = false;
 	int numOfSons = 0;
@@ -1037,13 +1043,25 @@ Exp::Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno):Node(2),is
 		output::errorMismatch(lineno);
 		st.set_prints(false); exit(0);
 	}
+	//validate Array Size
+	if(my_fucking_itoa(getArrSize(arr->type)) <= arr_idx->value){
+		output::errorInvalidArraySize(lineno, id->val);
+		st.set_prints(false); exit(0);
+	}
 	this->type = stringToType(getArrType(arr->type));
+
 	if(arr_idx->type != INT_t && arr_idx->type != BYTE_t){
 		output::errorMismatch(lineno);
 		st.set_prints(false); exit(0);
 	}
 	setSon(0,id);
 	setSon(1,arr_idx);
+
+
+	string offset = getStackOffset(id,arr_idx->value);
+	this->setReg(rp.regAlloc());
+	Register r = getReg();
+	cb.emit("lw " + r.getName() +" "+ offset + "($fp)" );
 }
 
 
@@ -1258,48 +1276,49 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 		Ter* id = static_cast<Ter*>(id_p);
 		Ter* ass = new Ter("=",op);
 		Exp* exp = static_cast<Exp*>(exp_p);
-		if (st.isNameDefined(id->val)){
-			const Name* temp = st.getName(id->val); //temp = LHS , exp = RHS : temp = exp ;
-			types tempType = stringToType(temp->type);
-			// TODO: if chunk
-			if(isArray(temp->type)){
-//				cout << "DEBUG: before is_array(exp)" << endl;
-				if(exp->is_array){
-//					cout << "DEBUG: exp IS array" << endl;
-//					cout << "DEBUG exp->arr_type: "+ exp->arr_type <<endl;
-//					cout << "DEBUG temp->arr_type: "+ temp->type <<endl;
-					if(exp->arr_type != temp->type){
-//						cout << "exp->arr_type != temp->type : true"<< endl;
-
-						output::errorMismatch(lineno);
-						st.set_prints(false); exit(0);
-					}
-				} else {
-					output::errorMismatch(lineno);
-					st.set_prints(false); exit(0);
-				}
-
-			}
-			if(temp->type == "func"){
-				output::errorUndef(lineno , id->val);
-				st.set_prints(false); exit(0);
-			}
-			if (tempType!=exp->type){
-				if (!(tempType==INT_t && exp->type==BYTE_t)){
-					output::errorMismatch(lineno);
-					st.set_prints(false); exit(0);
-				}
-			}
-			if (tempType==BYTE_t){
-				if (atoi(exp->value.c_str())>255){
-					output::errorByteTooLarge(lineno,exp->value);
-					st.set_prints(false); exit(0);
-				}
-			}
-		} else {
+		if (!st.isNameDefined(id->val)){
 			output::errorUndef(lineno,id->val);
 			st.set_prints(false); exit(0);
 		}
+		const Name* lhs = st.getName(id->val); //lhs = LHS , exp = RHS : temp = exp ;
+		types tempType = stringToType(lhs->type);
+		// TODO: if chunk
+
+
+		bool arrays_assignment = false;
+		//check if both are arrays
+		if(isArray(lhs->type) && exp->is_array){
+			//check if types of arrays are the same or convertable (int <- byte)
+			if(  (getArrType(lhs->type) != getArrType(exp->arr_type))
+					&& (getArrType(lhs->type) == "INT" && getArrType(exp->arr_type) != "BYTE") ){
+				output::errorMismatch(lineno);
+				st.set_prints(false); exit(0);
+			}
+			if( getArrSize(lhs->type) != getArrSize(exp->arr_type)){
+				output::errorMismatch(lineno);
+				st.set_prints(false); exit(0);
+			}
+			arrays_assignment = true;
+		}
+
+
+		if(lhs->type == "func"){
+			output::errorUndef(lineno , id->val);
+			st.set_prints(false); exit(0);
+		}
+		if (tempType!=exp->type){
+			if (!(tempType==INT_t && exp->type==BYTE_t)){
+				output::errorMismatch(lineno);
+				st.set_prints(false); exit(0);
+			}
+		}
+		if (tempType==BYTE_t){
+			if (atoi(exp->value.c_str())>255){
+				output::errorByteTooLarge(lineno,exp->value);
+				st.set_prints(false); exit(0);
+			}
+		}
+
 		Ter* sc = new Ter(";","SC");
 		string offset = getStackOffset(id);
 
@@ -1314,6 +1333,13 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 //		Register r = rp.regAlloc();
 //		cb.emit(loadword(r,_place));
 //		cb.emit("sw " + r.getName() + ", "exp->getReg() + offset + "($fp)");
+
+
+		if(arrays_assignment){
+			string arraySize = my_fucking_itoa(getArrSize(lhs->type));
+			Ter* rhs_id = (Ter*) exp->getSon(0);
+			genArrayAssignmentLoop( arraySize , getStackOffset(id)  , getStackOffset(rhs_id) );
+		}
 
 		Register r;
 		if (exp->isRegAllocated()){
@@ -1346,9 +1372,10 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 		}
 
 		rp.regRelease(r);
+		//rp.regRelease(exp->getReg());			//
 
 		this->ln=lineno;
-		//sp.clear();
+
 	}
 
 Statement::Statement(Node_ptr if_p, string noneed, int lineno):Node(5){
@@ -1711,6 +1738,16 @@ Statement::Statement(Node_ptr type_p , Node_ptr id_p , Node_ptr arr_size_p , str
 	setSon(0,type);
 	setSon(1,id);
 	setSon(2,arr_size);
+
+
+
+	int array_size_in_memory = 4 * atoi(arr_size->val.c_str());
+	string array_size_in_memory_str = my_fucking_itoa(array_size_in_memory);
+	cb.emit("subu $sp, $sp, " + array_size_in_memory_str); //allocates place on the stack for the array
+
+
+	initArray(type->str,arr_size->val,  getStackOffset(id));
+
 }
 
 Statement::Statement(Node_ptr id_p , Node_ptr arr_idx_p , Node_ptr exp2_p , string rule , string dummy , int lineno):Node(3){
@@ -1739,9 +1776,25 @@ Statement::Statement(Node_ptr id_p , Node_ptr arr_idx_p , Node_ptr exp2_p , stri
 		output::errorMismatch(lineno);
 		st.set_prints(false); exit(0);
 	}
+	//validate Array Size
+	if(my_fucking_itoa( getArrSize(arr->type) ) <= arr_idx->value){
+		output::errorInvalidArraySize(lineno, id->val);
+		st.set_prints(false); exit(0);
+	}
 	setSon(0,id);
 	setSon(1,arr_idx);
 	setSon(2,exp2);
+
+
+	if(!exp2->isRegAllocated()){
+		cout << "ERROR: Invalid Access to EXP's unallocated register." << endl;
+		st.set_prints(false); exit(0);
+	}
+
+	string offset = getStackOffset(id,arr_idx->value);
+	Register r = exp2->getReg();
+	cb.emit("sw " + r.getName() + + ", " + offset + "($fp)");
+	exp2->releaseReg();
 }
 
 // ============= implementing Statements ========

@@ -56,7 +56,7 @@ void Register::setAllocated(bool a){
 	this->allocated=a;
 }
 
-string my_fucking_itoa(int i,bool ignore_sign=false){
+string my_fucking_itoa(int i,bool ignore_sign){
 	string ret = "";
 	if(i==0){
 		return "0";

@@ -134,8 +134,8 @@ Statement:		WHILE M LPAREN Exp RPAREN {CheckBoolExpression($4,yylineno);st.incWh
 Call:					ID LPAREN ExpList RPAREN {$$=new Call($1,$3,yylineno); /*cout << "db " << ((ExpList*) $3)->myList[0] << endl;*/}
 |						ID LPAREN RPAREN {$$=new Call($1,yylineno);}
 ;
-ExpList:			Exp {evalExp($1);$$=new ExpList($1,yylineno);}
-|						Exp COMMA ExpList {$$=new ExpList($1,$3,yylineno);}
+ExpList:				Exp {evalExp($1);$$=new ExpList($1,yylineno); }
+|						Exp COMMA ExpList {$$=new ExpList($1,$3,yylineno); /*cout << "not expexted!" << endl;*/}
 ;
 Type:				INT {$$=new Type("INT",yylineno);}
 |						BYTE {$$=new Type("BYTE",yylineno);}

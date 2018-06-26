@@ -20,7 +20,7 @@ Z * registerPool.hpp
 
 using namespace std;
 
-string my_fucking_itoa(int i,bool ignore_sign);
+string my_fucking_itoa(int i,bool ignore_sign = false);
 
 class Register{
 

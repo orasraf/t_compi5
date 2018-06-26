@@ -14,6 +14,7 @@
 #include <string>
 #include "registerPool.hpp"
 #include "external_file.hpp"
+#include "util.hpp"
 
 void freeTempReg(Register r);
 Register getTempReg(list<string> regs);
@@ -29,6 +30,8 @@ void createPrinters();
 void reStoreFreeRegisters(list<Register> usedRegs);
 void storeFreeRegisters(int init_offset);
 void addReturnAssembly();
+void genArrayAssignmentLoop(string array_size , string lhs_offset , string rhs_offset);
+void initArray(string arrType, string arrSize , string arrOffSet);
 
 
 #endif /* GENASSEMBLY_HPP_ */

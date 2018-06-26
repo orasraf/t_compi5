@@ -163,3 +163,52 @@ void addReturnAssembly(){
 	cb.emit("jr $ra");
 }
 
+void genArrayAssignmentLoop(string array_size , string lhs_offset , string rhs_offset){
+	Register osReg = rp.regAlloc();
+	Register valReg = rp.regAlloc();
+	string r1 = osReg.getName();
+	string r2 = valReg.getName();
+	array_size = my_fucking_itoa( atoi(array_size.c_str()) * 4 );
+	cb.emit("li " + r1 + ", -" + array_size);				//li r1 , -arrSize					r1 := -arrSize
+	string loopLabel = cb.genLabel();
+	cb.emit("addu " + r1 + ", 4");							//loopLabel:addu r1 , 1				r1 := r1 + 1
+    cb.emit("addu " + r1 + ", " + r1 + ", $fp"); 			//addu r1 , r1 , $fp				r1 := r1 + $fp
+	cb.emit("subu " + r1 + ", " + r1 + ", " + rhs_offset);	//subu r1 , r1 , rhs_offset			r1 := r1 - rhs_offset
+	cb.emit("lw " + r2 + ", (" + r1 + ")");					//lw r2 , (r1)						r2 := (r1)
+	cb.emit("addu " + r1 + ", " + r1 + ", " + rhs_offset );	//addu r1 , r1 , rhs_offset			r1 := r1 + rhs_offset
+	cb.emit("subu " + r1 + ", " + r1 + ", " + lhs_offset );	//subu r1 , r1 , lhs_offset			r1 := r1 - lhs_offset
+	cb.emit("sw " + r2 + ", (" + r1 + ")");					//sw r2 , (r1)						(r1) := r2
+	cb.emit("addu " + r1 + ", " + r1 + ", " + lhs_offset );	//addu r1 , r1 , lhs_offset			r1 := r1 + lhs_offset
+    cb.emit("subu " + r1 + ", " + r1 + ", $fp"); 			//subu r1 , r1 , $fp				r1 := r1 - $fp
+	cb.emit("bne " + r1 + ", 0," + loopLabel);				//bne r1 , 0 , loopLabel			if r1 = 0 then pc := loopLable
+	rp.regRelease(osReg);
+	rp.regRelease(valReg);
+}
+
+void initArray(string arrType, string arrSize , string arrOffSet){
+	Register osReg = rp.regAlloc();
+	string r1 = osReg.getName();
+	arrSize = my_fucking_itoa( atoi(arrSize.c_str()) * 4 );
+
+	cb.emit("li " + r1 + ", -" + arrSize);				//li r1 , -arrSize					r1 := -arrSize
+	string loopLabel = cb.genLabel();
+	cb.emit("addu " + r1 + ", 4");							//loopLabel:addu r1 , 1				r1 := r1 + 1
+    cb.emit("addu " + r1 + ", " + r1 + ", $fp"); 			//addu r1 , r1 , $fp				r1 := r1 + $fp
+	cb.emit("subu " + r1 + ", " + r1 + ", " + arrOffSet);	//subu r1 , r1 , rhs_offset			r1 := r1 - arrOffSet
+	cb.emit(string("sw ") + "$0" + ", (" + r1 + ")");
+	cb.emit("addu " + r1 + ", " + r1 + ", " + arrOffSet );	//addu r1 , r1 , lhs_offset			r1 := r1 + arrOffSet
+    cb.emit("subu " + r1 + ", " + r1 + ", $fp"); 			//subu r1 , r1 , $fp				r1 := r1 - $fp
+	cb.emit("bne " + r1 + ", 0," + loopLabel);				//bne r1 , 0 , loopLabel			if r1 = 0 then pc := loopLable
+	rp.regRelease(osReg);
+}
+
+
+
+
+
+
+
+
+
+
+

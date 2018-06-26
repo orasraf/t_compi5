@@ -10,6 +10,7 @@
 #include <string>
 #include <stdlib.h>
 
+
 #ifndef T_COMPI3_UTIL_H_
 #define T_COMPI3_UTIL_H_
 
@@ -19,6 +20,7 @@ string getArrType(string type_size);
 int getArrSize(string type_size);
 string getNameType(string type);
 bool isArray(string type);
+
 
 
 
