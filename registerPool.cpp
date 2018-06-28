@@ -13,14 +13,16 @@
 #include <list>
 #include <sstream>
 #include "registerPool.hpp"
+#include <fstream>
 
 
-extern fstream df;
+
 
 using namespace std;
 
 int RegisterPool::count = 0 ;
 RegisterPool* RegisterPool::singletone = NULL ;
+
 
 int dbz(int k){
 	return k;
@@ -95,6 +97,7 @@ RegisterPool::RegisterPool(){
 		Register a = Register(i,regName+num,false);
 		//cout << regName + num << endl;
 		this->registers[i]=a;
+		debug[i] = 0;
 	}
 }
 
@@ -130,11 +133,28 @@ Register RegisterPool::regAlloc(){
 
 	cout << "your reg allocation is crap. seeya!" << endl;
 
-	int rc = 1/divByZero();
-	exit(rc);
+	//int rc = 1/divByZero();
+	printStack();
+	exit(0);
+}
+Register RegisterPool::regAlloc(int line){
+	for (int i=0; i<REGISTERS_NUM; i++){
+		if (!(this->registers[i].getAllocated())){
+			this->registers[i].setAllocated(true);
+			debug[i] = line;
+			return this->registers[i];
+		}
+	}
+
+	cout << "your reg allocation is crap. seeya!" << endl;
+
+	//int rc = 1/divByZero();
+	printStack();
+	exit(0);
 }
 
 void RegisterPool::regRelease(Register r){
+	debug[r.getNum()] = 0;
 	this->registers[r.getNum()].setAllocated(false);
 }
 
@@ -146,6 +166,18 @@ bool RegisterPool::areAllUsed(){
 		}
 	}
 	return true;
+}
+
+void RegisterPool::printStack(){
+
+	std::fstream fs ;
+	fs.open("reg.txt" , std::fstream::out | std::fstream::trunc);
+	for(int i = 0 ; i < 18 ; i++){
+		if(debug[i]!=0 || registers[i].getAllocated()){
+			fs << "Register " << i << " : " << debug[i] << " : " <<  registers[i].getAllocated() <<   endl;
+		}
+	}
+	fs.close();
 }
 
 string RegisterPool::getNotThese(list<string> regs){

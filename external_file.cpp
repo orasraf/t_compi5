@@ -21,8 +21,9 @@
 //#define STACK_OFFSET_UPDATE_INT  80
 
 
-//#define demit(x) (cb.emit(string(x) + "\t\t/*" + __FILE__ + ":" + my_fucking_itoa(__LINE__ ) +"*/ " ))
+//#define demit(x) (cb.emit(string(x) + "\t\t#" + __FILE__ + ":" + my_fucking_itoa(__LINE__ )  ))
 #define demit(x) (cb.emit(x ))
+#define dregAlloc() (rp.regAlloc(__LINE__))
 using namespace std;
 extern SymbolsTable st;
 extern int program_main;
@@ -53,15 +54,17 @@ void evalExp(Node_ptr exp_p){
 
 	Exp* exp = static_cast<Exp*>(exp_p);
 	if(!exp->isBool){
+		demit("#EVAL not taken - is not bool");
 		return;
 	}
 	if(exp->isRegAllocated()){
+		demit("#EVAL not taken - register allocated");
 		return;
 	}
 	demit("#EVAL EXP START");
 	//demit("#TEST >> exp is boolean");
 	string trueLine = cb.genLabel();
-	Register r = rp.regAlloc();
+	Register r = dregAlloc();
 	exp->setReg(r);
 	demit("li " + r.getName() + ", 1");
 	int nextLineTrue = demit("j ");
@@ -158,13 +161,13 @@ int pushArgs(ExpList* expList_p,int regsListSize){
 
 //		int place = exp->getPlace();
 //
-//		Register r = rp.regAlloc();
+//		Register r = dregAlloc();
 //		demit(loadword(r,place));
 		Register r = exp->getReg();
 
 
 		if(exp->is_array){
-			Register temp_r = rp.regAlloc();
+			Register temp_r = dregAlloc();
 			int arr_size = getArrSize(exp->arr_type);
 			demit("subu " + r.getName() + ", " + r.getName() + ", " + my_fucking_itoa((arr_size)*4));
 			for(int i  = arr_size - 1 ; i >= 0 ; i--){
@@ -212,7 +215,7 @@ int pushArgs(ExpList* expList_p,int regsListSize){
 //
 ////		int place = exp->getPlace();
 ////
-////		Register r = rp.regAlloc();
+////		Register r = dregAlloc();
 ////		demit(loadword(r,place));
 //		Register r = exp->getReg();
 //
@@ -276,7 +279,7 @@ void LoadIFLines(Node_ptr exp_p){
 
 		if (!exp->isRegAllocated()){
 //			demit("#Reg is no allocated in LoadIFLines");
-			r = rp.regAlloc();
+			r = dregAlloc();
 
 			if (exp->isPlaceSet()){
 				int place = 0-exp->getPlace();
@@ -301,6 +304,7 @@ void LoadIFLines(Node_ptr exp_p){
 		exp->falselist.push_back(falseline);
 
 		rp.regRelease(r);
+		exp->releaseReg();
 
 	}
 }
@@ -354,8 +358,11 @@ Type::Type(string a, int lineno):Node(1){
 //=======implementing Node
 
 
-Node::Node():numberOfSons(0),sons(NULL),reg_allocated(false),nextList(NULL),db_name(0),place_allocated(false){}
-Node::Node(int numSons):numberOfSons(numSons),reg_allocated(false),nextList(NULL),db_name(0),place_allocated(false){
+Node::Node():numberOfSons(0),sons(NULL),nextList(NULL),db_name(0),place_allocated(false){
+	reg_allocated=false;
+}
+Node::Node(int numSons):numberOfSons(numSons),nextList(NULL),db_name(0),place_allocated(false){
+		reg_allocated= false;
 		sons = new Node_ptr[numSons];
 	}
 Node::~Node(){
@@ -465,14 +472,14 @@ Node_ptr Node::getSon(int idx){
 				demit("lw $ra , "+my_fucking_itoa(UsedRegsList.size()*4 ,false)+"($sp)");	//restore ret address
 				demit("lw $fp "+my_fucking_itoa(UsedRegsList.size()*4 +4 ,false)+"($sp)");
 				rp.reAllocateRegsList(UsedRegsList);
-				Register temp_r = rp.regAlloc();
+				Register temp_r = dregAlloc();
 				demit("li "+ temp_r.getName() + ", " +  my_fucking_itoa((UsedRegsList.size() +1)*4  ,true));
 				demit("addu $sp, $sp, " + temp_r.getName());
 				rp.regRelease(temp_r);
 //				int stack_offset = sp.newTemp_and_emit(Register(-1,"$v0",true));
 //				setPlace(stack_offset);
 
-				Register ret_r  = rp.regAlloc();
+				Register ret_r  = dregAlloc();
 				demit("move " + ret_r.getName() + ", $v0");
 				setReg(ret_r);
 
@@ -580,12 +587,12 @@ Node_ptr Node::getSon(int idx){
 			demit("lw $ra , "+my_fucking_itoa(UsedRegsList.size()*4 ,false)+"($sp)");	//restore ret address
 			demit("lw $fp, "+my_fucking_itoa(UsedRegsList.size()*4 +4 ,false)+"($sp)");
 			rp.reAllocateRegsList(UsedRegsList);
-			Register temp_r = rp.regAlloc();
+			Register temp_r = dregAlloc();
 			demit("li "+ temp_r.getName() + ", " +
 					my_fucking_itoa((UsedRegsList.size() +1)*4  ,true));
 			demit("addu $sp, $sp, " + temp_r.getName());
 			rp.regRelease(temp_r);
-			Register ret_r = rp.regAlloc();
+			Register ret_r = dregAlloc();
 			demit("move " + ret_r.getName() + ", $v0");
 			setReg(ret_r);
 			//int stack_offset = sp.newTemp_and_emit(Register(-1,"$v0",true));
@@ -605,7 +612,9 @@ Node_ptr Node::getSon(int idx){
 		if(reg_allocated == false){
 			////cout << "illeagal register access. shutting down" << endl;
 			//exit(0);
-			reg = rp.regAlloc();
+			reg = dregAlloc();
+			reg_allocated = true;
+
 		}
 		return reg;
 	}
@@ -617,8 +626,13 @@ Node_ptr Node::getSon(int idx){
 		reg_allocated = true;
 	}
 	void Node::releaseReg(){
-		rp.regRelease(reg);
-		reg_allocated = false;
+		if(reg_allocated){
+			rp.regRelease(reg);
+			reg_allocated = false;
+			return;
+		}
+		cout << "ERROR: UNNECESSARY REG RELEASE" << endl;
+		st.set_prints(false); exit(0);
 	}
 	void Exp::EqFunc(types* type, string* val, Exp& b, Exp& c,int ln){
 		if (b.type==BOOL_t || c.type==BOOL_t || b.type==STRING_t || c.type==STRING_t || b.type==VOID_t || c.type==VOID_t){
@@ -850,7 +864,8 @@ Node_ptr Node::getSon(int idx){
 
 
 	Exp::Exp(string op , Node_ptr leftNode , Node_ptr rightNode, int lineno ,Node_ptr marker):
-		Node(3),type(UNDEF_t),value(""),lineno(lineno),isBool(false){
+		Node(3),type(UNDEF_t),value(""){
+		this->lineno = lineno;
 		isBool = false;
 		is_array = false;
 		Exp* left = static_cast<Exp*>(leftNode);
@@ -926,9 +941,9 @@ Node_ptr Node::getSon(int idx){
 
 	}
 	// TODO: added is_array
-	Exp::Exp(Node_ptr onlySon, int lineno):Node(2),type(UNDEF_t),value(""),lineno(lineno),isBool(false),is_array(false){
+	Exp::Exp(Node_ptr onlySon, int lineno):Node(2),type(UNDEF_t),value(""),lineno(lineno){
 		Exp* son = static_cast<Exp*>(onlySon);
-
+		isBool = false;
 		is_array = false;
 		if (son->type!=BOOL_t){
 			output::errorMismatch(lineno);
@@ -967,8 +982,9 @@ Node_ptr Node::getSon(int idx){
 	}
 
 	Exp::Exp(string opa, Node_ptr onlySon, string opb, int lineno):Node(3),type(UNDEF_t),
-			value(""),lineno(lineno),isBool(false),is_array(false){
+			value(""),lineno(lineno){
 		is_array = false;
+		isBool = false;
 		Exp* son = static_cast<Exp*>(onlySon);
 
 		this->type=son->type;
@@ -993,8 +1009,9 @@ Node_ptr Node::getSon(int idx){
 	}
 
 
-	Exp::Exp(string op, Node_ptr onlySon, int lineno):Node(1),type(UNDEF_t),value(""),lineno(lineno),isBool(false){
+	Exp::Exp(string op, Node_ptr onlySon, int lineno):Node(1),type(UNDEF_t),value(""),lineno(lineno){
 		string toEmit="";
+		isBool = false;
 		is_array = false;
 		Name* temp ;
 		if (op=="Call"){
@@ -1006,8 +1023,9 @@ Node_ptr Node::getSon(int idx){
 
 				setReg(son->getReg());
 			}
+//			son->releaseReg();
 			//setPlace(sp.newTemp_and_emit(Register(-1,"$v0",false)));
-//			Register r = rp.regAlloc();
+//			Register r = dregAlloc();
 //			string emit = "lw " + r.getName() + ", " + "<take_value_from_stack>";
 //			//toEmitAppend(emit);
 //			setReg(r);
@@ -1025,7 +1043,7 @@ Node_ptr Node::getSon(int idx){
 			    }
 				printToFile(code.str());
 				//================= debug END ================================
-				Register r = rp.regAlloc();
+				Register r = dregAlloc();
 				string emit = "li " + r.getName() + ", " + son->val;
 //				////cout << "debug: emit in INT  : " << endl;
 //				////cout << "					 : " + emit << endl;
@@ -1036,7 +1054,7 @@ Node_ptr Node::getSon(int idx){
 				setReg(r);
 			} else if (op=="TRUE" || op=="FALSE"){
 				this->type=BOOL_t;
-				//Register r = rp.regAlloc();
+				//Register r = dregAlloc();
 				if (op=="TRUE"){
 					int trueline = demit("j ");
 					truelist = cb.makelist(trueline);
@@ -1051,7 +1069,7 @@ Node_ptr Node::getSon(int idx){
 					output::errorByteTooLarge(lineno,son->val);
 					st.set_prints(false); exit(0);
 				}
-				Register r = rp.regAlloc();
+				Register r = dregAlloc();
 				string emit = "li " + r.getName() + ", " + son->val;
 //				////cout << "debug: emit in BYTE : " << endl;
 //				////cout << "					 : " + emit << endl;
@@ -1070,12 +1088,12 @@ Node_ptr Node::getSon(int idx){
 					temp =st.getNoneConstName(son->val);
 					if( true or st.getName(son->val)->offSet >= 0) {
 
-//						Register r = rp.regAlloc();
+//						Register r = dregAlloc();
 //						string emit = "li " + r.getName() + ", " + "<need_to_fill_from_stack>";
 //						son->//toEmitAppend(emit);
 //						setReg(r);
 						string offset = getStackOffset(son) ;
-						Register r = rp.regAlloc();
+						Register r = dregAlloc();
 //						////cout << "debug type ===== : ==== " << endl;
 //						////cout << "(son->val) = " << son->val << endl;
 //						////cout << "st.getName(son->val)->type = " << st.getName(son->val)->type << endl;
@@ -1121,7 +1139,7 @@ Node_ptr Node::getSon(int idx){
 				this->type=STRING_t;
 				string lable = string("_str_") + my_fucking_itoa(newStringLable(),false);
 				cb.emitData(lable + ": "+ ".asciiz " + son->getVal());
-				setReg(rp.regAlloc());
+				setReg(dregAlloc());
 				demit("la " + getReg().getName() + ", " + lable);
 			}
 			this->value=son->getVal();
@@ -1134,7 +1152,7 @@ Node_ptr Node::getSon(int idx){
 
 	}
 
-Exp::Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno):Node(2),is_array(false){
+Exp::Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno):Node(2){
 	is_array = false;
 	isBool = false;
 	this->lineno = lineno;
@@ -1169,16 +1187,16 @@ Exp::Exp(Node_ptr id_p, Node_ptr arr_idx_p, string rule , int lineno):Node(2),is
 
 	string offset = getStackOffset(id);
 	Register idx_r = arr_idx->getReg();
-	Register temp = rp.regAlloc();
+	Register temp = dregAlloc();
 	demit("mul "   + idx_r.getName() + ","+ idx_r.getName() +", 4");
 	demit("li " + temp.getName() + ", " + offset);
 	demit("subu " + idx_r.getName() + ", " + temp.getName() + ", " +  idx_r.getName()  );
 	demit("addu " + idx_r.getName() + ", " + idx_r.getName() + ", " + "$fp");
 	rp.regRelease(temp);
 
-	this->setReg(rp.regAlloc());
+	this->setReg(dregAlloc());
 	Register r = getReg();
-
+	arr_idx->releaseReg();
 	demit("lw " + r.getName() + + ", "  + "(" + idx_r.getName() + ")");
 
 }
@@ -1290,7 +1308,7 @@ Statement::Statement(Node_ptr call_p, int lineno):Node(2){
 		if(isRegAllocated()){
 			call->releaseReg();
 		}
-
+		call->releaseReg();
 
 
 		this->ln=lineno;
@@ -1339,7 +1357,7 @@ Statement::Statement(string kind, Node_ptr b_p, int lineno):Node(3){
 			demit("jr $ra");
 			rp.regRelease(r);
 //			reStoreFreeRegisters();
-//			Register temp_r = rp.regAlloc();
+//			Register temp_r = dregAlloc();
 //			demit("li "+ temp_r.getName() + ", " + STACK_OFFSET_UPDATE);
 //			demit("addu $sp, $sp, " + temp_r.getName());
 //			demit("lw $ra , -8($sp)");	//restore ret address
@@ -1382,7 +1400,7 @@ Statement::Statement(Node_ptr type_p, Node_ptr id_p, int lineno):Node(3),ln(0){
 		setSon(2,sc);
 		//toEmitAppend("subu $sp, $sp, 4");
 
-		Register r = rp.regAlloc();
+		Register r = dregAlloc();
 		demit("li " + r.getName() + ", 0");
 		demit("sw " + r.getName() + ", " + offset + "($fp)");
 		demit("subu $sp, $sp, 4");
@@ -1450,7 +1468,7 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 
 		//toEmitAppend("sw " + exp->getReg().getName() + ", " + offset + "($fp)");
 
-//		Register r = rp.regAlloc();
+//		Register r = dregAlloc();
 //		demit(loadword(r,_place));
 //		demit("sw " + r.getName() + ", "exp->getReg() + offset + "($fp)");
 
@@ -1466,7 +1484,7 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 				r = exp->getReg();
 				demit("sw " + r.getName() + ", " + offset + "($fp) # reg is indeed alloc'd");
 			} else if (exp->value=="true" or exp->value=="false"){
-				r = rp.regAlloc(); // TODO: see what you can do about this
+				r = dregAlloc(); // TODO: see what you can do about this
 				if (exp->value=="true"){
 					demit("li " + r.getName() + ", 1");
 				} else if (exp->value=="false"){
@@ -1474,7 +1492,7 @@ Statement::Statement(string op, Node_ptr id_p, Node_ptr exp_p, int lineno):Node(
 				}
 				demit("sw " + r.getName() + ", " + offset + "($fp)");
 			} else {
-				r = rp.regAlloc(); // TODO: check this as well
+				r = dregAlloc(); // TODO: check this as well
 				string truelabel = cb.genLabel();
 				demit("li " + r.getName() + ", 1");
 				int endtrue = demit("j ");
@@ -1617,7 +1635,7 @@ Statement::Statement(string op1, Node_ptr exp_p, Node_ptr caselist_p, string op2
 				r1 = getTempReg(l);
 				stack1 = true;
 			} else {
-				r1 = rp.regAlloc();
+				r1 = dregAlloc();
 			}
 			//demit(string("li ")+ r1.getName() + ", " + my_fucking_itoa(exp->getPlace(),false));
 		}
@@ -1634,7 +1652,7 @@ Statement::Statement(string op1, Node_ptr exp_p, Node_ptr caselist_p, string op2
 				r2= getTempReg(l);
 				stack2 = true;
 			} else {
-				r2 = rp.regAlloc();
+				r2 = dregAlloc();
 			}
 			demit("li "+ r2.getName() + ", " + my_fucking_itoa(value,false));
 			demit("beq " + r1.getName() + ", " + r2.getName() + ", " + quad);
@@ -1715,7 +1733,7 @@ Statement::Statement(Node_ptr type_p, Node_ptr id_p, Node_ptr exp_p, int lineno)
 		if(type->val==BOOL_t){
 			//demit("#TEST >> exp is boolean");
 //			string trueLine = cb.next();
-//			Register r = rp.regAlloc();
+//			Register r = dregAlloc();
 //			exp->setReg(r);
 //			demit("li " + r.getName() + ", 1");
 //			int nextLineTrue = demit("j ");
@@ -1739,7 +1757,7 @@ Statement::Statement(Node_ptr type_p, Node_ptr id_p, Node_ptr exp_p, int lineno)
 			demit("sw " + r.getName() + ", ($sp)");
 			demit("subu $sp, $sp, 4");
 		} else if (exp->value=="true" or exp->value=="false"){
-			r = rp.regAlloc(); // TODO: see what you can do about this
+			r = dregAlloc(); // TODO: see what you can do about this
 			if (exp->value=="true"){
 				demit("li " + r.getName() + ", 1");
 			} else if (exp->value=="false"){
@@ -1748,7 +1766,7 @@ Statement::Statement(Node_ptr type_p, Node_ptr id_p, Node_ptr exp_p, int lineno)
 			demit("sw " + r.getName() + ", ($sp)");
 			demit("subu $sp, $sp, 4");
 		} else {
-			r = rp.regAlloc(); // TODO: check this as well
+			r = dregAlloc(); // TODO: check this as well
 			string truelabel = cb.genLabel();
 			demit("li " + r.getName() + ", 1");
 			int endtrue = demit("j ");
@@ -1913,7 +1931,7 @@ Statement::Statement(Node_ptr id_p , Node_ptr arr_idx_p , Node_ptr exp2_p , stri
 	if(!exp2->isRegAllocated()){
 		if(exp2->isBool && false){
 			string val = ((Ter*)(exp2->getSon(0)))->val;
-			Register r = rp.regAlloc();
+			Register r = dregAlloc();
 			exp2->setReg(r);
 			string b_val =  val=="true"?"1":"0";
 			demit("li " + r.getName() + ", " + b_val);
@@ -1927,7 +1945,7 @@ Statement::Statement(Node_ptr id_p , Node_ptr arr_idx_p , Node_ptr exp2_p , stri
 	string offset = getStackOffset(id);
 
 	Register r = exp2->getReg();
-	Register temp = rp.regAlloc();
+	Register temp = dregAlloc();
 	demit("li " + temp.getName() + ", " + offset);
 	demit("mul "   + idx_r.getName() + ","+ idx_r.getName() +", 4");
 	demit("subu " + idx_r.getName() + ", " +  temp.getName()  + ", " +  idx_r.getName()  );

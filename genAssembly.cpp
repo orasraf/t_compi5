@@ -15,14 +15,15 @@ extern RegisterPool rp;
 extern CodeBuffer&  cb;
 
 
-//#define demit(x) (cb.emit(string(x) + "\t\t/*" + __FILE__ + ":" + my_fucking_itoa(__LINE__ ) +"*/ " ))
+//#define demit(x) (cb.emit(string(x) + "\t\t#" + __FILE__ + ":" + my_fucking_itoa(__LINE__ ) ))
 #define demit(x) (cb.emit(x ))
+#define dregAlloc() (rp.regAlloc(__LINE__))
 using namespace std;
 
 Register loadPlace_allocs(Node_ptr exp_p){
 	Register r;
 	if(!exp_p->isRegAllocated()){
-		r = rp.regAlloc();
+		r = dregAlloc();
 		demit(loadword(r,(exp_p)->getPlace()));
 		//demit("ERROR : loadPlace_allocs");
 	} else {
@@ -58,7 +59,7 @@ pair<Register,bool> chooseReg(list<string> regs, Exp* exp){
 			list<string> l;
 			r = getTempReg(l);
 		} else {
-			r = rp.regAlloc();
+			r = dregAlloc();
 		}
 		demit(loadword(r,(exp)->getPlace()));
 	}
@@ -99,7 +100,7 @@ void divRegs(Register r1, Register r2){
 		swapped=true;
 		r3 = getTempReg(regs);
 	}else{
-		r3 = rp.regAlloc();
+		r3 = dregAlloc();
 	}
 	demit("li " + r3.getName() + ", 0");
 	int origbp = demit("bne " + r2.getName() + ", " + r3.getName() + ", ");
@@ -167,8 +168,8 @@ void addReturnAssembly(){
 }
 
 void genArrayAssignmentLoop(string array_size , string lhs_offset , string rhs_offset){
-	Register osReg = rp.regAlloc();
-	Register valReg = rp.regAlloc();
+	Register osReg = dregAlloc();
+	Register valReg = dregAlloc();
 	string r1 = osReg.getName();
 	string r2 = valReg.getName();
 	array_size = my_fucking_itoa( atoi(array_size.c_str()) * 4 );
@@ -191,7 +192,7 @@ void genArrayAssignmentLoop(string array_size , string lhs_offset , string rhs_o
 }
 
 void initArray(string arrType, string arrSize , string arrOffSet){
-	Register osReg = rp.regAlloc();
+	Register osReg = dregAlloc();
 	string r1 = osReg.getName();
 	arrSize = my_fucking_itoa( atoi(arrSize.c_str()) * 4 );
 

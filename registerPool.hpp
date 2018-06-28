@@ -43,6 +43,7 @@ class RegisterPool{
 	static int count ;
 	static RegisterPool* singletone ;
 	Register registers[18];
+	int debug[18];
 
 public :
 	static RegisterPool getInstance();
@@ -51,11 +52,13 @@ public :
 	Register regSpecNum(int num);
 	Register regSpecName(string name);
 	Register regAlloc();
+	Register regAlloc(int line);
 	void regRelease(Register r);
 	bool areAllUsed();
 	string getNotThese(list<string> regs);
 	list<Register> getUsedRegs();
 	void freeAllRegs();
+	void printStack();
 	void reAllocateRegsList(list<Register> regs);
 };
 
