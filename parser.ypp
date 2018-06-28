@@ -7,6 +7,7 @@
 #include<sys/types.h>
 #include "bp.hpp"
 #include "genAssembly.hpp"
+#include "util.hpp"
 
 using namespace std;
 
@@ -112,7 +113,7 @@ Statement:		LBRACE OpenScope Statements CloseScope RBRACE {$$=new Statement("STA
 //================================== ARRAY END ===========================================
 |						ID ASSIGN Exp SC {evalExp($3);$$=new Statement("ASSIGN",$1,$3,yylineno);}
 //================================== ARRAY assign ========================================
-|						ID LBRACK Exp RBRACK ASSIGN Exp SC {$$=new Statement($1,$3,$6,"ID LBRACK Exp RBRACK ASSIGN Exp SC","dummy",yylineno);}
+|						ID LBRACK Exp RBRACK ASSIGN Exp SC {evalExp($6);$$=new Statement($1,$3,$6,"ID LBRACK Exp RBRACK ASSIGN Exp SC","dummy",yylineno);}
 //================================== ARRAY assign end=====================================
 |						Call SC {$$=new Statement($1,yylineno);}
 |						RETURN SC {$$=new Statement("RETURN",yylineno);}
@@ -135,7 +136,7 @@ Call:					ID LPAREN ExpList RPAREN {$$=new Call($1,$3,yylineno); /*cout << "db "
 |						ID LPAREN RPAREN {$$=new Call($1,yylineno);}
 ;
 ExpList:				Exp {evalExp($1);$$=new ExpList($1,yylineno); }
-|						Exp COMMA ExpList {$$=new ExpList($1,$3,yylineno); /*cout << "not expexted!" << endl;*/}
+|						Exp COMMA ExpList {evalExp($1);$$=new ExpList($1,$3,yylineno); /*cout << "not expexted!" << endl;*/}
 ;
 Type:				INT {$$=new Type("INT",yylineno);}
 |						BYTE {$$=new Type("BYTE",yylineno);}
@@ -154,8 +155,8 @@ Exp:				LPAREN Exp RPAREN {$$=new Exp("(",$2,")",yylineno);}
 |						NUM {$$=new Exp("INT",$1,yylineno);}
 |						NUM B {$$=new Exp("B",$1,yylineno);}
 |						STRING {$$=new Exp("STRING",$1,yylineno);}
-|						TRUE {$$=new Exp("TRUE",$1,yylineno);}
-|						FALSE {$$=new Exp("FALSE",$1,yylineno);}
+|						TRUE { $$=new Exp("TRUE",$1,yylineno);}
+|						FALSE { $$=new Exp("FALSE",$1,yylineno);}
 |						NOT Exp {$$=new Exp($2,yylineno);}
 ;
 Exp:					Exp AND {LoadIFLines($1);}						M Exp {LoadIFLines($5); $$=new Exp("AND",$1,$5,yylineno,$4);}
@@ -202,6 +203,7 @@ CodeBuffer&  cb = CodeBuffer::instance();
 
 
 int main(){
+	resetFile();
 	program_main = 0;
 	st.set_prints(false);
 	pair<string,string> params[1] ;
@@ -212,6 +214,7 @@ int main(){
 	st.addNameable(Name("printi","func","VOID",1,another));
 	cb.emitData("zero:");
 	cb.emitData(".asciiz  \"Error division by zero\\n\"");
+	
 	int ret_val =  yyparse();
 	if(ret_val != 0 ){
 		output::errorSyn(yylineno);

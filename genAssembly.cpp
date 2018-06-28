@@ -14,14 +14,17 @@
 extern RegisterPool rp;
 extern CodeBuffer&  cb;
 
+
+//#define demit(x) (cb.emit(string(x) + "\t\t/*" + __FILE__ + ":" + my_fucking_itoa(__LINE__ ) +"*/ " ))
+#define demit(x) (cb.emit(x ))
 using namespace std;
 
 Register loadPlace_allocs(Node_ptr exp_p){
 	Register r;
 	if(!exp_p->isRegAllocated()){
 		r = rp.regAlloc();
-		cb.emit(loadword(r,(exp_p)->getPlace()));
-		//cb.emit("ERROR : loadPlace_allocs");
+		demit(loadword(r,(exp_p)->getPlace()));
+		//demit("ERROR : loadPlace_allocs");
 	} else {
 		r = exp_p->getReg();
 	}
@@ -33,14 +36,14 @@ Register getTempReg(list<string> regs){
 		cout << "ERROR when looking for a free register!" << endl;
 		name="$25";
 	}
-	cb.emit("subu $sp,$sp,4");
-	cb.emit("sw " + name + ",($sp)");
+	demit("subu $sp,$sp,4");
+	demit("sw " + name + ",($sp)");
 	return rp.regSpecName(name);
 }
 
 void freeTempReg(Register r){
-	cb.emit("lw " +r.getName() + ", ($sp)");
-	cb.emit("addu $sp, $sp, 4");
+	demit("lw " +r.getName() + ", ($sp)");
+	demit("addu $sp, $sp, 4");
 	return;
 }
 
@@ -57,7 +60,7 @@ pair<Register,bool> chooseReg(list<string> regs, Exp* exp){
 		} else {
 			r = rp.regAlloc();
 		}
-		cb.emit(loadword(r,(exp)->getPlace()));
+		demit(loadword(r,(exp)->getPlace()));
 	}
 	return make_pair(r,flag);
 }
@@ -72,17 +75,17 @@ void unchooseReg(Register r, bool flag){
 
 
 void addRegs(Register r1, Register r2){
-		cb.emit("addu " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
+		demit("addu " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
 		rp.regRelease(r2);
 }
 
 void subRegs(Register r1, Register r2){
-	cb.emit("subu " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
+	demit("subu " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
 	rp.regRelease(r2);
 }
 
 void mulRegs(Register r1, Register r2){
-	cb.emit("mul " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
+	demit("mul " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
 	rp.regRelease(r2);
 }
 
@@ -98,15 +101,15 @@ void divRegs(Register r1, Register r2){
 	}else{
 		r3 = rp.regAlloc();
 	}
-	cb.emit("li " + r3.getName() + ", 0");
-	int origbp = cb.emit("bne " + r2.getName() + ", " + r3.getName() + ", ");
-	cb.emit("la $a0, zero");
-	cb.emit("li $v0, 4");
-	cb.emit("syscall");
-	cb.emit("li $v0, 10");
-	cb.emit("syscall");
+	demit("li " + r3.getName() + ", 0");
+	int origbp = demit("bne " + r2.getName() + ", " + r3.getName() + ", ");
+	demit("la $a0, zero");
+	demit("li $v0, 4");
+	demit("syscall");
+	demit("li $v0, 10");
+	demit("syscall");
 	string bp = cb.genLabel();
-	cb.emit("div " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
+	demit("div " + r1.getName() + ", " +  r1.getName() + ", " + r2.getName());
 	cb.bpatch(cb.makelist(origbp),bp);
 	if (swapped){
 		freeTempReg(r3);
@@ -125,16 +128,16 @@ string loadword(Register r, int offset){
 }
 
 void createPrinters(){
-	cb.emit("printi:");
-	cb.emit("lw $a0, 4($fp)");
-	cb.emit("li $v0, 1");
-	cb.emit("syscall");
-	cb.emit("jr $ra");
-	cb.emit("print:");
-	cb.emit("lw $a0, 4($fp)");
-	cb.emit("li $v0, 4");
-	cb.emit("syscall");
-	cb.emit("jr $ra");
+	demit("printi:");
+	demit("lw $a0, 4($fp)");
+	demit("li $v0, 1");
+	demit("syscall");
+	demit("jr $ra");
+	demit("print:");
+	demit("lw $a0, 4($fp)");
+	demit("li $v0, 4");
+	demit("syscall");
+	demit("jr $ra");
 	return;
 }
 
@@ -143,7 +146,7 @@ void storeFreeRegisters(int init_offset){
 	for(list<Register>::iterator i = usedRegs.begin() ; i != usedRegs.end() ; i++){
 		string os = my_fucking_itoa(init_offset,false);
 		string os_toPrint = (os=="0")?"":os;
-		cb.emit(string("sw $") + my_fucking_itoa(i->getNum()+8,false) + ", " +os_toPrint +"($sp)");
+		demit(string("sw $") + my_fucking_itoa(i->getNum()+8,false) + ", " +os_toPrint +"($sp)");
 		init_offset-=4;
 	}
 }
@@ -153,14 +156,14 @@ void reStoreFreeRegisters(list<Register> usedRegs){
 	for(list<Register>::reverse_iterator ri = usedRegs.rbegin() ; ri != usedRegs.rend() ; ri++){
 		string os = my_fucking_itoa(init_offset,true);
 		string os_toPrint = (os=="0")?"":os;
-		cb.emit(string("lw $") + my_fucking_itoa(ri->getNum()+8,false) + ", " +os_toPrint +"($sp)");
+		demit(string("lw $") + my_fucking_itoa(ri->getNum()+8,false) + ", " +os_toPrint +"($sp)");
 		init_offset-=4;
 	}
 }
 
 void addReturnAssembly(){
-	cb.emit("move $sp, $fp");
-	cb.emit("jr $ra");
+	demit("move $sp, $fp");
+	demit("jr $ra");
 }
 
 void genArrayAssignmentLoop(string array_size , string lhs_offset , string rhs_offset){
@@ -169,18 +172,20 @@ void genArrayAssignmentLoop(string array_size , string lhs_offset , string rhs_o
 	string r1 = osReg.getName();
 	string r2 = valReg.getName();
 	array_size = my_fucking_itoa( atoi(array_size.c_str()) * 4 );
-	cb.emit("li " + r1 + ", -" + array_size);				//li r1 , -arrSize					r1 := -arrSize
+	cb.emit("#===START ARRAY ASSIGNMENT");
+	demit("li " + r1 + ", -" + array_size);				//li r1 , -arrSize					r1 := -arrSize
 	string loopLabel = cb.genLabel();
-	cb.emit("addu " + r1 + ", 4");							//loopLabel:addu r1 , 1				r1 := r1 + 1
-    cb.emit("addu " + r1 + ", " + r1 + ", $fp"); 			//addu r1 , r1 , $fp				r1 := r1 + $fp
-	cb.emit("subu " + r1 + ", " + r1 + ", " + rhs_offset);	//subu r1 , r1 , rhs_offset			r1 := r1 - rhs_offset
-	cb.emit("lw " + r2 + ", (" + r1 + ")");					//lw r2 , (r1)						r2 := (r1)
-	cb.emit("addu " + r1 + ", " + r1 + ", " + rhs_offset );	//addu r1 , r1 , rhs_offset			r1 := r1 + rhs_offset
-	cb.emit("subu " + r1 + ", " + r1 + ", " + lhs_offset );	//subu r1 , r1 , lhs_offset			r1 := r1 - lhs_offset
-	cb.emit("sw " + r2 + ", (" + r1 + ")");					//sw r2 , (r1)						(r1) := r2
-	cb.emit("addu " + r1 + ", " + r1 + ", " + lhs_offset );	//addu r1 , r1 , lhs_offset			r1 := r1 + lhs_offset
-    cb.emit("subu " + r1 + ", " + r1 + ", $fp"); 			//subu r1 , r1 , $fp				r1 := r1 - $fp
-	cb.emit("bne " + r1 + ", 0," + loopLabel);				//bne r1 , 0 , loopLabel			if r1 = 0 then pc := loopLable
+	demit("addu " + r1 + ", 4");							//loopLabel:addu r1 , 1				r1 := r1 + 1
+    demit("addu " + r1 + ", " + r1 + ", $fp"); 			//addu r1 , r1 , $fp				r1 := r1 + $fp
+	demit("addu " + r1 + ", " + r1 + ", " + rhs_offset);	//subu r1 , r1 , rhs_offset			r1 := r1 - rhs_offset
+	demit("lw " + r2 + ", (" + r1 + ")");					//lw r2 , (r1)						r2 := (r1)
+	demit("subu " + r1 + ", " + r1 + ", " + rhs_offset );	//addu r1 , r1 , rhs_offset			r1 := r1 + rhs_offset
+	demit("addu " + r1 + ", " + r1 + ", " + lhs_offset );	//subu r1 , r1 , lhs_offset			r1 := r1 - lhs_offset
+	demit("sw " + r2 + ", (" + r1 + ")");					//sw r2 , (r1)						(r1) := r2
+	demit("subu " + r1 + ", " + r1 + ", " + lhs_offset );	//addu r1 , r1 , lhs_offset			r1 := r1 + lhs_offset
+    demit("subu " + r1 + ", " + r1 + ", $fp"); 			//subu r1 , r1 , $fp				r1 := r1 - $fp
+	demit("bne " + r1 + ", 0," + loopLabel);				//bne r1 , 0 , loopLabel			if r1 = 0 then pc := loopLable
+	cb.emit("#===END ARRAY ASSIGNMENT");
 	rp.regRelease(osReg);
 	rp.regRelease(valReg);
 }
@@ -190,15 +195,15 @@ void initArray(string arrType, string arrSize , string arrOffSet){
 	string r1 = osReg.getName();
 	arrSize = my_fucking_itoa( atoi(arrSize.c_str()) * 4 );
 
-	cb.emit("li " + r1 + ", -" + arrSize);				//li r1 , -arrSize					r1 := -arrSize
+	demit("li " + r1 + ", -" + arrSize);				//li r1 , -arrSize					r1 := -arrSize
 	string loopLabel = cb.genLabel();
-	cb.emit("addu " + r1 + ", 4");							//loopLabel:addu r1 , 1				r1 := r1 + 1
-    cb.emit("addu " + r1 + ", " + r1 + ", $fp"); 			//addu r1 , r1 , $fp				r1 := r1 + $fp
-	cb.emit("subu " + r1 + ", " + r1 + ", " + arrOffSet);	//subu r1 , r1 , rhs_offset			r1 := r1 - arrOffSet
-	cb.emit(string("sw ") + "$0" + ", (" + r1 + ")");
-	cb.emit("addu " + r1 + ", " + r1 + ", " + arrOffSet );	//addu r1 , r1 , lhs_offset			r1 := r1 + arrOffSet
-    cb.emit("subu " + r1 + ", " + r1 + ", $fp"); 			//subu r1 , r1 , $fp				r1 := r1 - $fp
-	cb.emit("bne " + r1 + ", 0," + loopLabel);				//bne r1 , 0 , loopLabel			if r1 = 0 then pc := loopLable
+	demit("addu " + r1 + ", 4");							//loopLabel:addu r1 , 1				r1 := r1 + 1
+    demit("addu " + r1 + ", " + r1 + ", $fp"); 			//addu r1 , r1 , $fp				r1 := r1 + $fp
+	demit("addu " + r1 + ", " + r1 + ", " + arrOffSet);	//subu r1 , r1 , rhs_offset			r1 := r1 - arrOffSet
+	demit(string("sw ") + "$0" + ", (" + r1 + ")");
+	demit("subu " + r1 + ", " + r1 + ", " + arrOffSet );	//addu r1 , r1 , lhs_offset			r1 := r1 + arrOffSet
+    demit("subu " + r1 + ", " + r1 + ", $fp"); 			//subu r1 , r1 , $fp				r1 := r1 - $fp
+	demit("bne " + r1 + ", 0," + loopLabel);				//bne r1 , 0 , loopLabel			if r1 = 0 then pc := loopLable
 	rp.regRelease(osReg);
 }
 

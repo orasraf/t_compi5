@@ -351,6 +351,15 @@ compareRuntimeFiles "MaxRegistersInAction"
 compareRuntimeFiles "Ultimate"
 compareRuntimeFiles "FunctionByValue"
 compareRuntimeFiles "RecursionFunctionByValue"
+compareRuntimeFiles "ReportRuntimeArrayOutOfBoundsStatementByteEqualToSize"
+compareRuntimeFiles "ReportRuntimeArrayOutOfBoundsStatementByteBiggerThanSize"
+compareRuntimeFiles "ReportRuntimeArrayOutOfBoundsExpByteEqualToSize"
+compareRuntimeFiles "ReportRuntimeArrayOutOfBoundsExpByteBiggerThanSize"
+compareRuntimeFiles "ReportRuntimeArrayOutOfBoundsExpIntEqualToSize"
+compareRuntimeFiles "ReportRuntimeArrayOutOfBoundsExpIntBiggerThanSize"
+compareRuntimeFiles "ReportRuntimeArrayOutOfBoundsExpIntNegative"
+compareRuntimeFiles "IfIfElse"
+compareRuntimeFiles "MoreArrayAssignsThanRegisters"
 
 # These tests are not relevant due to 
 # "Can't expand text segment mips" ERROR :D

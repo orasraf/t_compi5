@@ -9,7 +9,9 @@
 #include <string>
 #include <stdlib.h>
 #include "output.hpp"
+#include <fstream>
 
+fstream df;
 
 string getArrType(string type_size){
 	string type = "";
@@ -62,4 +64,14 @@ bool isArray(string type) {
 	return false;
 }
 
+void printToFile(string code){
+	df.open("debug_code",std::fstream::out | std::fstream::app);
+	df << code;
+	df.close();
+}
+
+void resetFile(){
+	df.open("debug_code", std::fstream::trunc);
+	df.close();
+}
 

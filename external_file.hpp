@@ -13,6 +13,7 @@
 #include <iostream>
 #include <cstddef>
 #include <string>
+#include "util.hpp"
 #include "scopes_DS.hpp"
 #include "registerPool.hpp"
 
@@ -255,7 +256,7 @@ class ExpList : public Node{
 
 public:
 	int size;
-	types type;
+
 	vector<string> myList;
 
 	ExpList(Node_ptr exp_p, int lineno);

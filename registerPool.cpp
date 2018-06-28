@@ -15,10 +15,20 @@
 #include "registerPool.hpp"
 
 
+extern fstream df;
+
 using namespace std;
 
 int RegisterPool::count = 0 ;
 RegisterPool* RegisterPool::singletone = NULL ;
+
+int dbz(int k){
+	return k;
+}
+
+int divByZero(){
+	return dbz(0);
+}
 
 Register::Register(){
 	this->num=-1;
@@ -98,7 +108,9 @@ Register RegisterPool::regSpecName(string name){
 			return this->registers[i];
 		}
 	}
-	//TODO:catch exception
+	int rc = 1/divByZero();
+	exit(rc);
+	return Register();
 }
 
 RegisterPool RegisterPool::getInstance(){
@@ -115,8 +127,11 @@ Register RegisterPool::regAlloc(){
 			return this->registers[i];
 		}
 	}
+
 	cout << "your reg allocation is crap. seeya!" << endl;
-	exit(0);
+
+	int rc = 1/divByZero();
+	exit(rc);
 }
 
 void RegisterPool::regRelease(Register r){
@@ -124,6 +139,7 @@ void RegisterPool::regRelease(Register r){
 }
 
 bool RegisterPool::areAllUsed(){
+	return false;
 	for (int i=0; i<REGISTERS_NUM; i++){
 		if (registers[i].getAllocated()==false){
 			return false;

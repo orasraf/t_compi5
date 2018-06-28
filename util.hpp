@@ -20,8 +20,8 @@ string getArrType(string type_size);
 int getArrSize(string type_size);
 string getNameType(string type);
 bool isArray(string type);
-
-
+void resetFile();
+void printToFile(string code);
 
 
 #endif /* T_COMPI3_UTIL_H_ */
